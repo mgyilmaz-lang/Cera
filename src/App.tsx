@@ -76,7 +76,6 @@ const tempRange = (a: number, b: number) => a + '–' + b + '°C';
 function App() {
   const [tab, setTab] = useState('camur');
   const [liteMode, setLiteMode] = useState(true);
-  const [clayIndex, setClayIndex] = useState(0);
   const [claySearch, setClaySearch] = useState('');
   const [clayTypeFilter, setClayTypeFilter] = useState('Tümü');
   const [clayBrandFilter, setClayBrandFilter] = useState('Tümü');
@@ -85,7 +84,7 @@ function App() {
   const [glazeIndex, setGlazeIndex] = useState(0);
   const [kilnIndex, setKilnIndex] = useState(3);
   type ProductSpec = { id: number; name: string; clayIndex: number; shape: 'Silindir' | 'Kase / Kupa' | 'Dikdörtgen'; height: number; width: number; diameter: number; wallThickness: number; pieces: number; bodyType: string };
-  const makeProduct = (id: number): ProductSpec => ({ id, name: 'Ürün ' + id, clayIndex: 0, shape: 'Silindir', height: 100, width: 80, diameter: 80, wallThickness: 4, pieces: 12, bodyType: 'Stoneware' });
+  const makeProduct = (id: number, source?: ProductSpec): ProductSpec => ({ id, name: 'Ürün ' + id, clayIndex: source?.clayIndex ?? 0, shape: source?.shape ?? 'Silindir', height: source?.height ?? 100, width: source?.width ?? 80, diameter: source?.diameter ?? 80, wallThickness: source?.wallThickness ?? 4, pieces: source?.pieces ?? 12, bodyType: source?.bodyType ?? 'Stoneware' });
   const [products, setProducts] = useState<ProductSpec[]>([makeProduct(1)]);
   const [activeProductIndex, setActiveProductIndex] = useState(0);
   const activeProduct = products[activeProductIndex] || products[0];
@@ -109,14 +108,9 @@ function App() {
   const setBodyType = (n: string) => updateProduct({ bodyType: n });
   const addProduct = () => {
     if (products.length >= 3) return;
-    const next = makeProduct(products.length + 1);
+    const next = makeProduct(products.length + 1, products[activeProductIndex]);
     setProducts(prev => [...prev, next]);
     setActiveProductIndex(products.length);
-  };
-  const removeProduct = (index: number) => {
-    if (products.length <= 1) return;
-    setProducts(prev => prev.filter((_,i) => i !== index).map((p,i) => ({ ...p, id: i + 1, name: 'Ürün ' + (i + 1) })));
-    setActiveProductIndex(Math.max(0, Math.min(activeProductIndex, products.length - 2)));
   };
   const [glazeAmount, setGlazeAmount] = useState(180);
   const [electric, setElectric] = useState(4.5);
