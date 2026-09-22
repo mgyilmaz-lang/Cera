@@ -265,49 +265,74 @@ function App() {
   }, [productLoadPlans, activeProductIndex]);
   const loadCombinations = useMemo(() => {
     type Placement = { productId:number; productName:string; x:number; y:number; w:number; h:number; rotated:boolean; };
+    type ShelfPlan = { level:number; heightUsed:number; placements:Placement[]; utilization:number; };
     const gap = 8;
     const shelfW = Math.max(100, shelfSize);
-    const shelfH = Math.max(100, kiln.height);
-    const items = products.flatMap(p => Array.from({length: Math.min(p.pieces, 24)}, (_,i) => ({
-      productId:p.id, productName:p.name + ' #' + (i+1),
-      w:Math.max(20,p.width || p.diameter), h:Math.max(20,p.diameter || p.width)
+    const maxItemsPerProduct = 24;
+    const items = products.flatMap(p => Array.from({length: Math.min(p.pieces, maxItemsPerProduct)}, (_,i) => ({
+      productId:p.id,
+      productName:p.name + ' #' + (i+1),
+      w:Math.max(20,p.width || p.diameter),
+      h:Math.max(20,p.diameter || p.width),
+      vertical:Math.max(20,p.height)
     })));
     const variants = [
       {name:'Standart', rotate:true, sort:'area'},
-      {name:'Genişlik öncelikli', rotate:true, sort:'width'},
-      {name:'Yükseklik öncelikli', rotate:true, sort:'height'},
+      {name:'Geniş ürün öncelikli', rotate:true, sort:'width'},
+      {name:'Yüksek ürün öncelikli', rotate:true, sort:'height'},
       {name:'Döndürme kapalı', rotate:false, sort:'area'}
     ] as const;
+
     const pack = (variant: typeof variants[number]) => {
       const source=[...items].sort((a,b)=>{
-        if(variant.sort==='width') return b.w-a.w;
-        if(variant.sort==='height') return b.h-a.h;
+        if(variant.sort==='width') return Math.max(b.w,b.h)-Math.max(a.w,a.h);
+        if(variant.sort==='height') return b.vertical-a.vertical;
         return (b.w*b.h)-(a.w*a.h);
       });
-      const placed:Placement[]=[];
+      const shelves:ShelfPlan[]=[];
       for(const item of source){
         const options=variant.rotate && item.w!==item.h
           ? [{w:item.w,h:item.h,rotated:false},{w:item.h,h:item.w,rotated:true}]
           : [{w:item.w,h:item.h,rotated:false}];
-        let best:Placement|null=null;
-        for(const o of options){
-          for(let y=gap;y+o.h<=shelfH;y+=gap){
-            for(let x=gap;x+o.w<=shelfW;x+=gap){
-              const collision=placed.some(p=>x< p.x+p.w+gap && x+o.w+gap>p.x && y<p.y+p.h+gap && y+o.h+gap>p.y);
-              if(!collision){ best={productId:item.productId,productName:item.productName,x,y,w:o.w,h:o.h,rotated:o.rotated}; break; }
+        let best:{shelf:ShelfPlan; placement:Placement; score:number}|null=null;
+        for(const shelf of shelves){
+          if(shelf.heightUsed < item.vertical) continue;
+          for(const o of options){
+            for(let y=gap;y+o.h<=shelfW;y+=gap){
+              for(let x=gap;x+o.w<=shelfW;x+=gap){
+                const collision=shelf.placements.some(p=>x<p.x+p.w+gap && x+o.w+gap>p.x && y<p.y+p.h+gap && y+o.h+gap>p.y);
+                if(collision) continue;
+                const score=(shelf.placements.length*100000) - (shelfW*shelfW-(o.w*o.h)) + (shelfW-(x+o.w)) + (shelfW-(y+o.h));
+                if(!best || score>best.score) best={shelf,placement:{productId:item.productId,productName:item.productName,x,y,w:o.w,h:o.h,rotated:o.rotated},score};
+              }
             }
-            if(best) break;
           }
-          if(best) break;
         }
-        if(best) placed.push(best);
+        if(best) {
+          best.shelf.placements.push(best.placement);
+          continue;
+        }
+        const currentHeight = shelves.reduce((m,s)=>Math.max(m,s.heightUsed),0);
+        if(currentHeight + item.vertical + gap > kiln.height) continue;
+        const newShelf:ShelfPlan={level:shelves.length+1,heightUsed:item.vertical,placements:[],utilization:0};
+        for(const o of options){
+          if(o.w+gap<=shelfW && o.h+gap<=shelfW){
+            newShelf.placements.push({productId:item.productId,productName:item.productName,x:gap,y:gap,w:o.w,h:o.h,rotated:o.rotated});
+            break;
+          }
+        }
+        if(newShelf.placements.length) shelves.push(newShelf);
       }
-      const usedArea=placed.reduce((s,p)=>s+p.w*p.h,0);
-      const utilization=Math.round(usedArea/(shelfW*shelfH)*100);
-      const bounds=placed.reduce((b,p)=>({w:Math.max(b.w,p.x+p.w),h:Math.max(b.h,p.y+p.h)}),{w:0,h:0});
-      return {name:variant.name,placed,utilization,usedArea,unplaced:items.length-placed.length,bounds};
+      shelves.forEach(shelf=>{
+        const area=shelf.placements.reduce((sum,p)=>sum+p.w*p.h,0);
+        shelf.utilization=Math.round(area/(shelfW*shelfW)*100);
+      });
+      const placedCount=shelves.reduce((n,s)=>n+s.placements.length,0);
+      const usedArea=shelves.reduce((n,s)=>n+s.placements.reduce((a,p)=>a+p.w*p.h,0),0);
+      const totalShelfArea=Math.max(1,shelves.length*shelfW*shelfW);
+      return {name:variant.name,shelves,placedCount,unplaced:items.length-placedCount,utilization:Math.round(usedArea/totalShelfArea*100),totalLevels:shelves.length};
     };
-    return variants.map(pack).sort((a,b)=>b.utilization-a.utilization);
+    return variants.map(pack).sort((a,b)=>a.unplaced-b.unplaced || b.utilization-a.utilization);
   }, [products, shelfSize, kiln.height]);
 
   async function refreshSources() {
