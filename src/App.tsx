@@ -264,49 +264,51 @@ function App() {
     return plan?.perShelf ?? 0;
   }, [productLoadPlans, activeProductIndex]);
   const loadCombinations = useMemo(() => {
-    const maxRows = 8;
-    const candidates = products.map(p => ({
-      ...p,
-      w: Math.max(20, p.width || p.diameter),
-      d: Math.max(20, p.diameter || p.width),
-      h: Math.max(20, p.height)
-    }));
-    const fit = (items: typeof candidates, shelf: number) => {
-      const sorted = [...items].sort((a,b) => Math.max(b.w,b.d)-Math.max(a.w,a.d));
-      const rows: {items: typeof candidates; used:number}[] = [];
-      for (const item of sorted) {
-        let placed = false;
-        for (const row of rows) {
-          if (row.used + Math.min(item.w,item.d) <= shelf) {
-            row.items.push(item);
-            row.used += Math.min(item.w,item.d);
-            placed = true;
-            break;
+    type Placement = { productId:number; productName:string; x:number; y:number; w:number; h:number; rotated:boolean; };
+    const gap = 8;
+    const shelfW = Math.max(100, shelfSize);
+    const shelfH = Math.max(100, kiln.height);
+    const items = products.flatMap(p => Array.from({length: Math.min(p.pieces, 24)}, (_,i) => ({
+      productId:p.id, productName:p.name + ' #' + (i+1),
+      w:Math.max(20,p.width || p.diameter), h:Math.max(20,p.diameter || p.width)
+    })));
+    const variants = [
+      {name:'Standart', rotate:true, sort:'area'},
+      {name:'Genişlik öncelikli', rotate:true, sort:'width'},
+      {name:'Yükseklik öncelikli', rotate:true, sort:'height'},
+      {name:'Döndürme kapalı', rotate:false, sort:'area'}
+    ] as const;
+    const pack = (variant: typeof variants[number]) => {
+      const source=[...items].sort((a,b)=>{
+        if(variant.sort==='width') return b.w-a.w;
+        if(variant.sort==='height') return b.h-a.h;
+        return (b.w*b.h)-(a.w*a.h);
+      });
+      const placed:Placement[]=[];
+      for(const item of source){
+        const options=variant.rotate && item.w!==item.h
+          ? [{w:item.w,h:item.h,rotated:false},{w:item.h,h:item.w,rotated:true}]
+          : [{w:item.w,h:item.h,rotated:false}];
+        let best:Placement|null=null;
+        for(const o of options){
+          for(let y=gap;y+o.h<=shelfH;y+=gap){
+            for(let x=gap;x+o.w<=shelfW;x+=gap){
+              const collision=placed.some(p=>x< p.x+p.w+gap && x+o.w+gap>p.x && y<p.y+p.h+gap && y+o.h+gap>p.y);
+              if(!collision){ best={productId:item.productId,productName:item.productName,x,y,w:o.w,h:o.h,rotated:o.rotated}; break; }
+            }
+            if(best) break;
           }
+          if(best) break;
         }
-        if (!placed && rows.length < maxRows) rows.push({items:[item], used:Math.min(item.w,item.d)});
+        if(best) placed.push(best);
       }
-      return rows;
+      const usedArea=placed.reduce((s,p)=>s+p.w*p.h,0);
+      const utilization=Math.round(usedArea/(shelfW*shelfH)*100);
+      const bounds=placed.reduce((b,p)=>({w:Math.max(b.w,p.x+p.w),h:Math.max(b.h,p.y+p.h)}),{w:0,h:0});
+      return {name:variant.name,placed,utilization,usedArea,unplaced:items.length-placed.length,bounds};
     };
-    const shelves = Math.max(1, Math.floor((kiln.height + shelfGap) / (Math.max(20, Math.min(...candidates.map(p=>p.h))) + shelfGap)));
-    const options = [0,1,2,3].map(variant => {
-      const rows = fit(candidates, Math.max(20, shelfSize));
-      if (variant === 1) rows.reverse();
-      if (variant === 2) rows.sort((a,b) => a.used-b.used);
-      if (variant === 3) rows.sort((a,b) => b.used-a.used);
-      const totalSlots = rows.reduce((s,r) => s + Math.max(1, Math.floor(shelfSize / Math.max(20,r.used))),0);
-      const utilization = Math.min(100, (rows.reduce((s,r)=>s+r.used,0) / Math.max(1,rows.length*shelfSize))*100);
-      return {
-        name: ['Dengeli','Geniş ürün öncelikli','Kompakt ürün öncelikli','Doluluk öncelikli'][variant],
-        rows: rows.length,
-        shelves,
-        slots: totalSlots * shelves,
-        utilization: Math.round(utilization),
-        layout: rows.map(r => r.items.map(p => p.name).join(' + ')).join(' | ')
-      };
-    });
-    return options.sort((a,b) => b.utilization-a.utilization);
-  }, [products, shelfSize, shelfGap, kiln.height]);
+    return variants.map(pack).sort((a,b)=>b.utilization-a.utilization);
+  }, [products, shelfSize, kiln.height]);
 
   async function refreshSources() {
     setBusy(true);
@@ -402,7 +404,8 @@ function App() {
         <div className="loadTable"><div className="loadTableHead"><span>Ürün</span><span>Adet</span><span>Raf / seviye</span><span>Teorik kapasite</span></div>{productLoadPlans.map(p => <div className="loadTableRow" key={p.id}><b>{p.name}</b><span>{p.pieces}</span><span>{p.perShelf} / {p.requiredLevels}</span><span>{p.capacity}</span></div>)}</div>
         <div className="loadTotal"><span>Aynı pişirimde planlanan toplam</span><b>{products.reduce((sum,p) => sum + p.pieces, 0)} ürün</b></div>
         <div className="combinationBox"><div className="combinationHead"><div><span className="eyebrow">OTOMATİK YERLEŞTİRME</span><h3>Farklı kombinasyonlar</h3><p className="muted">Ürün ölçülerini birlikte değerlendirerek raf doluluğunu artıran alternatif yerleşimler oluşturur.</p></div></div>
-        <div className="combinationList">{loadCombinations.map((x,i) => <div className={i===0?'combinationRow recommended':'combinationRow'} key={x.name}><div><b>{x.name}</b>{i===0 && <span className="comboBadge">En yüksek teorik doluluk</span>}<small>{x.layout || 'Yerleşim oluşturulamadı'}</small></div><strong>%{x.utilization}</strong><span>{x.shelves} seviye · {x.slots} teorik yer</span></div>)}</div></div>
+        <div className="combinationList">{loadCombinations.map((x,i) => <div className={i===0?'combinationRow recommended':'combinationRow'} key={x.name}><div><b>{x.name}</b>{i===0 && <span className="comboBadge">En verimli</span>}<small>{x.placed.length} ürün yerleşti · {x.unplaced} ürün dışarıda · {x.bounds.w} × {x.bounds.h} mm kullanım alanı</small></div><strong>%{x.utilization}</strong><span>{x.placed.length ? x.placed.slice(0,4).map(p => p.productName).join(' · ') : 'Yerleşim yok'}</span></div>)}</div>
+        <div className="loadMap"><div className="loadMapTitle">2D raf yerleşimi · en verimli kombinasyon</div><div className="rackMap">{loadCombinations[0]?.placed.map(p => <div key={p.productName} className="rackItem" style={{left:(p.x/shelfSize*100)+'%',top:(p.y/kiln.height*100)+'%',width:(p.w/shelfSize*100)+'%',height:(p.h/kiln.height*100)+'%'}} title={p.productName}>{p.productName.replace(/ #\d+$/,'')}</div>)}</div></div></div>
         <p className="note">Bu algoritma farklı ölçüleri aynı raf üzerinde kombinasyon olarak dener ve teorik doluluk oranını karşılaştırır. Gerçek yüklemede ürünler arası güvenlik boşluğu, raf kenarı, ısı dolaşımı ve ürünün gerçek ayak/çap ölçüsü ayrıca kontrol edilmelidir.</p></section>}
 
     {tab === 'sir' && <section className="glazeCalc"><div className="productTabs compact"><div className="productTabButtons">{products.map((p,i) => <button key={p.id} className={activeProductIndex===i?'active':''} onClick={() => setActiveProductIndex(i)}>{p.name}</button>)}</div><div className="productHint">Sır yüzeyi ve tüketimi seçili ürünün ölçülerinden hesaplanır.</div></div><div className="glazeHead"><div><span className="eyebrow">SIR TÜKETİMİ</span><h2>Sır miktarını kolayca hesaplayın</h2><p className="muted">Yüzey alanı Çamur sekmesindeki ürün ölçülerinden otomatik hesaplanır.</p></div><span className="glazeIcon">◇</span></div><div className="glazeGrid"><div className="glazeInputs"><div className="glazeCard"><h3>Sır Seçimi</h3><label className="field"><span>Marka / seri</span><select value={glazeIndex} onChange={e => setGlazeIndex(Number(e.target.value))}>{glazes.map((x,i)=><option key={x.code} value={i}>{x.brand} · {x.code} · {x.name}</option>)}</select></label><div className="glazeMeta"><span>Uygulama aralığı</span><b>{tempRange(glaze.min,glaze.max)}</b><span>Yüzey</span><b>{glaze.finish}</b><span>Fiyat</span><b>{glaze.price > 0 ? glaze.price.toFixed(2) + ' TL/kg' : 'Fiyat girilmeli'}</b></div></div><div className="glazeCard"><h3>Uygulama Bilgileri</h3><div className="fields"><label className="field"><span>Yüzey alanı / ürün</span><div><input type="number" value={glazeSurface.toFixed(3)} readOnly/><b>m²</b></div></label><Field label="Kat sayısı" value={coatCount} set={setCoatCount} suffix="kat"/><Field label="Fire / atık" value={waste} set={setWaste} suffix="%"/><Field label="Ürün adedi" value={pieces} set={setPieces} suffix="adet"/></div><div className="dimensionSource"><span>Çamur sekmesinden gelen ölçüler</span><b>{shape} · En {width} mm · Boy {height} mm · Çap {diameter} mm · Et {wallThickness} mm</b></div></div></div><aside className="glazeResult"><div className="resultHeader"><span className="eyebrow">SONUÇ</span><span className="resultIcon">◇</span></div><div className="resultRows"><div><span>Yüzey / ürün</span><b>{(glazeSurface * 10000).toFixed(0)} cm²</b></div><div className="resultHighlight"><span>Sır / ürün</span><b>{glazeCalc.perPiece.toFixed(1)} g</b></div><div><span>Toplam sır · {pieces} adet</span><b>{Math.round(glazeCalc.grams).toLocaleString('tr-TR')} g</b></div><div><span>Toplam</span><b>{(glazeCalc.grams / 1000).toFixed(2)} kg</b></div><div><span>Sır maliyeti</span><b>{glaze.price > 0 ? money(glazeCalc.cost) : 'Fiyat girilmeli'}</b></div></div><div className="glazeInfo">ⓘ Hesap, ürünün dış ve iç yüzeyleri ile et kalınlığına göre yaklaşık yapılır. Kulp, ayak ve özel detaylar ayrıca fark yaratabilir.</div><button className="transferBtn" onClick={() => setTab('camur')}>▣ Çamur ölçülerine dön <span>→</span></button></aside></div></section>}
