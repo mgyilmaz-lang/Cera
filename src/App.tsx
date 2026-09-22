@@ -1,5 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api } from '@appdeploy/client';
+
+const api = {
+  async get(path: string) {
+    const response = await fetch(path);
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    return { data: await response.json() };
+  },
+  async post(path: string, body: unknown) {
+    const response = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    return { data: await response.json() };
+  }
+};
 
 type Clay = { id: string; brand: string; code: string; name: string; forming: 'Vakum' | 'Döküm'; type: string; color: string; min: number; max: number; recommended: number | null; dryingShrinkage: number | null; firingShrinkage: number | null; totalShrinkage: number | null; absorption: number | null; plasticity: string; packageWeightKg: number; price: number; supplier: string; sourceUrl: string; checkedAt: string; confidence: 'Doğrulandı' | 'Kısmen doğrulandı' | 'Doğrulanmalı'; notes: string; source: string };
 type Glaze = { code: string; name: string; brand: string; min: number; max: number; price: number; finish: string; coats: number; source: string; sourceUrl: string; confidence: 'Ürün serisi doğrulandı' | 'Renk/ürün bazında doğrulanmalı' };
