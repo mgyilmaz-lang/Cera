@@ -1,0 +1,15 @@
+{
+  "name": "Seramik OS",
+  "short_name": "Seramik OS",
+  "description": "Seramik üretimi için maliyet, çamur, sır ve fırın hesaplama uygulaması.",
+  "lang": "tr-TR",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f7f7f5",
+  "theme_color": "#111111",
+  "icons": [
+    {"src":"./seramik-os-icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}
+  ]
+}
