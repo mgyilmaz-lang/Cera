@@ -260,6 +260,8 @@ function App() {
       density,
       theoreticalGr,
       perPieceGr,
+      perPieceKg: perPieceGr / 1000,
+      working: perPieceGr,
       totalKg,
       packageWeightKg,
       packages,
