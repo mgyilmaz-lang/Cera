@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 
+type FieldProps = { label:string; value:number; set:(n:number)=>void; suffix:string };
+
+const Field = ({ label, value, set, suffix }: FieldProps) => (
+  <label className="field"><span>{label}</span><div><input type="number" min="0" value={value} onChange={e => set(Number(e.target.value))}/><b>{suffix}</b></div></label>
+);
+
 const api = {
   async get(path: string) {
     const response = await fetch(path);
@@ -391,9 +397,6 @@ function App() {
   function addLog() {
     setLogs([{ date: new Date().toLocaleString('tr-TR'), kiln: kiln.brand + ' ' + kiln.name, temp: firingTemp, hours, pieces, cost: costs.electricity, note: 'Üretim kaydı' }, ...logs]);
   }
-
-  const Field = ({ label, value, set, suffix }: {label:string; value:number; set:(n:number)=>void; suffix:string}) =>
-    <label className="field"><span>{label}</span><div><input type="number" min="0" value={value} onChange={e => set(Number(e.target.value))}/><b>{suffix}</b></div></label>;
 
   return <main>
     <header><div className="logo">◈</div><div className="brandBlock"><div className="eyebrow">SERAMİK OS · ÜRETİM MERKEZİ</div><h1>Çamur • Sır • Fırın • Maliyet</h1><p>{liteMode ? 'Gerekli bilgileri gir, sonucu hemen al.' : 'Atölyenin üretim, maliyet ve pişirim kararlarını tek yerde yönet.'}</p></div><div className="modeSwitch"><button className={liteMode?'active':''} onClick={() => setLiteMode(true)}>LITE</button><button className={!liteMode?'active':''} onClick={() => setLiteMode(false)}>PRO</button></div></header><div className="toolbar"><span>● {sourceStatus}</span>{!liteMode && <button onClick={refreshSources}>{busy ? 'Çalışıyor…' : 'Web kaynaklarını güncelle'}</button>}</div><nav className="tabs">{(liteMode ? [['camur','🧱 Çamur'],['hesap','💰 Maliyet'],['yukleme','🔥 Fırın'],['sir','🎨 Sır']] : [['camur','🧱 Çamur'],['camurdb','📚 Çamur Veritabanı'],['hesap','💰 Maliyet'],['uyum','🔗 Uyumluluk'],['yukleme','🔥 Fırın'],['sir','🎨 Sır'],['kar','💰 Kâr'],['stok','📦 Stok & Kayıt'],['ai','🤖 AI Asistan']]).map(([id,label]) => <button className={tab===id?'active':''} onClick={() => setTab(id)} key={id}>{label}</button>)}</nav>
