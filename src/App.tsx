@@ -397,7 +397,7 @@ function App() {
         });
       }
       const shelves:ShelfPlan[]=[];
-      const scanStep=6;
+      const scanStep=4;
 
       const gapToPlacement=(p:Placement,q:Placement)=>{
         if(isRect(p.shape)&&isRect(q.shape)){
@@ -464,7 +464,11 @@ function App() {
             for(const q of shelf.placements) nearestGap=Math.min(nearestGap,gapToPlacement(p,q));
             const compactness=1/(nearestGap+1);
             const centerDist=Math.hypot(x+o.w/2-R,y+o.h/2-R);
-            const score=compactness*100000-centerDist*0.25;
+            // Önce gerçek temas ceplerini doldur, ancak aynı anda dairesel rafın
+            // kenarına gereksiz boşluk bırakmayan ve ürünleri birbirine yakın tutan
+            // adayları tercih et.
+            const edgePenalty=Math.max(0,Math.min(x,y,shelfDiameter-(x+o.w),shelfDiameter-(y+o.h))-clearance);
+            const score=compactness*100000-edgePenalty*180-centerDist*0.08;
             if(!best||score>best.score) best={p,score};
           }
         }
@@ -518,11 +522,13 @@ function App() {
       const all:LoadPlan[]=[];
       for(const gap of gapCandidates) for(const mode of modes) all.push(buildPlan(source,name,mode,gap));
       const better=(a:LoadPlan,b:LoadPlan)=>{
+        // Öncelik: tüm ürünleri sığdır, sonra raf yüzeyini daha verimli doldur.
+        // Raf sayısı ve karma kullanım bundan sonra tie-break olarak değerlendirilir.
         const mixedPriority=source.length>1 ? (b.mixedShelfCount-a.mixedShelfCount) : 0;
         return a.unplaced-b.unplaced ||
+          b.utilization-a.utilization ||
           a.totalLevels-b.totalLevels ||
           mixedPriority ||
-          b.utilization-a.utilization ||
           a.emptyArea-b.emptyArea;
       };
       const recommended=all.length?all.reduce((best,p)=>better(p,best)<0?p:best):buildPlan(source,name,'areaDesc',gapCandidates[0]);
