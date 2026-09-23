@@ -379,41 +379,78 @@ function App() {
         return bb-aa;
       });
       const shelves:ShelfPlan[]=[];
+      const scanStep=6;
+
+      const gapToPlacement=(p:Placement,q:Placement)=>{
+        if(isRect(p.shape)&&isRect(q.shape)){
+          const dx=Math.max(0,Math.max(q.x-(p.x+p.w),p.x-(q.x+q.w)));
+          const dy=Math.max(0,Math.max(q.y-(p.y+p.h),p.y-(q.y+q.h)));
+          return Math.hypot(dx,dy);
+        }
+        if(!isRect(p.shape)&&!isRect(q.shape)){
+          return Math.max(0,Math.hypot(p.x+p.w/2-(q.x+q.w/2),p.y+p.h/2-(q.y+q.h/2))-p.w/2-q.w/2);
+        }
+        const circle=isRect(p.shape)?q:p;
+        const rect=isRect(p.shape)?p:q;
+        const cx=circle.x+circle.w/2,cy=circle.y+circle.h/2;
+        const nx=Math.max(rect.x,Math.min(cx,rect.x+rect.w));
+        const ny=Math.max(rect.y,Math.min(cy,rect.y+rect.h));
+        return Math.max(0,Math.hypot(cx-nx,cy-ny)-circle.w/2);
+      };
 
       const tryPlace=(shelf:ShelfPlan,item:Item) => {
         const options=item.shape==='Dikdörtgen'&&item.w!==item.h
           ? [{w:item.w,h:item.h,rotated:false},{w:item.h,h:item.w,rotated:true}]
           : [{w:item.w,h:item.h,rotated:false}];
         let best:{p:Placement;score:number}|null=null;
+
         for(const o of options){
           if(o.w+2*clearance>shelfDiameter||o.h+2*clearance>shelfDiameter) continue;
-          const xs=new Set<number>([clearance,Math.max(clearance,R-o.w/2),Math.max(clearance,shelfDiameter-o.w-clearance)]);
-          const ys=new Set<number>([clearance,Math.max(clearance,R-o.h/2),Math.max(clearance,shelfDiameter-o.h-clearance)]);
-          for(const q of shelf.placements){
-            xs.add(Math.max(clearance,q.x+q.w+clearance));
-            xs.add(Math.max(clearance,q.x-o.w-clearance));
-            ys.add(Math.max(clearance,q.y+q.h+clearance));
-            ys.add(Math.max(clearance,q.y-o.h-clearance));
+
+          const candidates=new Set<string>();
+          const addCandidate=(x:number,y:number)=>{
+            const sx=Math.round(x/scanStep)*scanStep;
+            const sy=Math.round(y/scanStep)*scanStep;
+            if(sx>=0&&sy>=0&&sx+o.w<=shelfDiameter&&sy+o.h<=shelfDiameter) candidates.add(sx+'|'+sy);
+          };
+
+          // Tüm raf yüzeyini tarıyoruz. Böylece kenarlardaki ve ürünlerin arasında
+          // kalan cepler de değerlendirilir. Ek olarak mevcut ürünlerin tam komşuluğu
+          // ayrıca denenir, böylece 8 mm güvenlik boşluğu korunarak sıkı paketleme yapılır.
+          for(let y=clearance;y<=shelfDiameter-o.h-clearance;y+=scanStep){
+            for(let x=clearance;x<=shelfDiameter-o.w-clearance;x+=scanStep) addCandidate(x,y);
           }
-          for(const x0 of xs) for(const y0 of ys){
-            const x=Math.round(x0/step)*step,y=Math.round(y0/step)*step;
-            if(x<0||y<0||x+o.w>shelfDiameter||y+o.h>shelfDiameter) continue;
+          addCandidate(R-o.w/2,R-o.h/2);
+          addCandidate(clearance,clearance);
+          addCandidate(shelfDiameter-o.w-clearance,shelfDiameter-o.h-clearance);
+
+          for(const q of shelf.placements){
+            addCandidate(q.x+q.w+clearance,q.y);
+            addCandidate(q.x-o.w-clearance,q.y);
+            addCandidate(q.x,q.y+q.h+clearance);
+            addCandidate(q.x,q.y-o.h-clearance);
+            addCandidate(q.x+q.w+clearance,q.y+q.h+clearance);
+          }
+
+          for(const key of candidates){
+            const [x,y]=key.split('|').map(Number);
             const inside=isRect(item.shape)?rectInsideCircle(x,y,o.w,o.h):circleInsideCircle(x,y,o.w);
             if(!inside) continue;
             const p:Placement={productId:item.productId,productName:item.productName,shape:item.shape,x,y,w:o.w,h:o.h,rotated:o.rotated};
             if(shelf.placements.some(q=>overlaps(q,p))) continue;
-            let contact=0;
-            for(const q of shelf.placements){
-              const hx=Math.max(0,Math.min(p.x+p.w,q.x+q.w)-Math.max(p.x,q.x));
-              const hy=Math.max(0,Math.min(p.y+p.h,q.y+q.h)-Math.max(p.y,q.y));
-              if(Math.abs(p.x+p.w+clearance-q.x)<1||Math.abs(q.x+q.w+clearance-p.x)<1) contact+=hy;
-              if(Math.abs(p.y+p.h+clearance-q.y)<1||Math.abs(q.y+q.h+clearance-p.y)<1) contact+=hx;
-            }
-            const centerDist=Math.hypot(p.x+p.w/2-R,p.y+p.h/2-R);
-            const score=contact*1000-centerDist;
+
+            // En yakın kenara/ürüne yaklaşan aday, boş cepleri doldurmaya öncelik alır.
+            // Ancak merkezden aşırı uzaklaşmayı engellemek için küçük bir merkez cezası vardır.
+            const boundaryGap=Math.min(x,y,shelfDiameter-(x+o.w),shelfDiameter-(y+o.h));
+            let nearestGap=boundaryGap;
+            for(const q of shelf.placements) nearestGap=Math.min(nearestGap,gapToPlacement(p,q));
+            const compactness=1/(nearestGap+1);
+            const centerDist=Math.hypot(x+o.w/2-R,y+o.h/2-R);
+            const score=compactness*100000-centerDist*0.25;
             if(!best||score>best.score) best={p,score};
           }
         }
+
         if(!best) return false;
         shelf.placements.push(best.p);
         shelf.heightUsed=Math.max(shelf.heightUsed,item.vertical);
@@ -429,8 +466,10 @@ function App() {
           if(tryPlace(shelf,item)){placed=true;break;}
         }
         if(placed) continue;
+
         const total=shelves.reduce((sum,s)=>sum+s.heightUsed,0)+item.vertical+shelves.length*gap;
         if(total>usableHeight) continue;
+
         const shelf:ShelfPlan={level:shelves.length+1,heightUsed:item.vertical,recommendedSpacing:item.vertical+gap,placements:[],utilization:0,emptyArea:0,filledArea:0};
         if(tryPlace(shelf,item)) shelves.push(shelf);
       }
@@ -675,9 +714,9 @@ function App() {
             <div className="planTitle">Karma yerleşimin gerçek raf planı</div>
             {(mixedPlan?.shelves || []).map(s => <div className="shelfPlan" key={s.level}>
               <div className="shelfPlanHead"><b>Raf {s.level}</b><span>{s.placements.length} ürün · %{s.utilization} doluluk · {s.heightUsed} mm ürün yüksekliği · {s.recommendedSpacing} mm önerilen raf aralığı</span></div>
-              <div className="shelfMixCounts">{Object.entries(mixedPlan?.counts || {}).map(([id,count]) => {
-                const p=kilnProducts.find(x=>String(x.id)===String(id));
-                return p && count ? <span key={id}>{p.name}: <b>{count}</b></span> : null;
+              <div className="shelfMixCounts">{kilnProducts.map(p => {
+                const count=s.placements.filter(x=>String(x.productId)===String(p.id)).length;
+                return count ? <span key={p.id}>{p.name}: <b>{count}</b></span> : null;
               })}</div>
               <div className="rackMap shelfMap">{s.placements.map(p => <div key={p.productName} className={'rackItem '+(p.shape==='Dikdörtgen'||p.shape==='Kare'?'rectangle':'circle')} style={{left:(p.x/Math.max(1,mixedPlan?.shelfDiameter || effectiveShelfDiameter)*100)+'%',top:(p.y/Math.max(1,mixedPlan?.shelfDiameter || effectiveShelfDiameter)*100)+'%',width:(p.w/Math.max(1,mixedPlan?.shelfDiameter || effectiveShelfDiameter)*100)+'%',height:(p.h/Math.max(1,mixedPlan?.shelfDiameter || effectiveShelfDiameter)*100)+'%'}} title={p.productName}>{p.productName.replace(/ #\d+$/,'')}</div>)}</div>
             </div>)}
