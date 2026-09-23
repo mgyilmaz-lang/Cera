@@ -662,7 +662,7 @@ function App() {
 
       <div className="loadSummary">
         <div><span>Fırın içi</span><b>Ø {kiln.diameter} × {kiln.height} mm</b></div>
-        <div><span>Kullanılabilir raf</span><b>Ø {usableShelfDiameter} mm</b></div>
+        <div><span>Kullanılabilir raf</span><b>Ø {effectiveShelfDiameter} mm</b></div>
         <div><span>Önerilen aralık</span><b>{recommendedRackGap} mm</b></div>
         <div><span>Önerilen raf</span><b>{recommendedShelfCount} seviye</b></div>
       </div>
@@ -729,7 +729,7 @@ function App() {
                 const p=kilnProducts.find(x=>String(x.id)===String(id));
                 return p && count ? <span key={id}>{p.name}: <b>{count}</b></span> : null;
               })}</div>
-              <div className="rackMap shelfMap">{s.placements.map(p => <div key={p.productName} className={'rackItem '+(p.shape==='Dikdörtgen'||p.shape==='Kare'?'rectangle':'circle')} style={{left:(p.x/Math.max(1,usableShelfDiameter)*100)+'%',top:(p.y/Math.max(1,usableShelfDiameter)*100)+'%',width:(p.w/Math.max(1,usableShelfDiameter)*100)+'%',height:(p.h/Math.max(1,usableShelfDiameter)*100)+'%'}} title={p.productName}>{p.productName.replace(/ #\d+$/,'')}</div>)}</div>
+              <div className="rackMap shelfMap">{s.placements.map(p => <div key={p.productName} className={'rackItem '+(p.shape==='Dikdörtgen'||p.shape==='Kare'?'rectangle':'circle')} style={{left:(p.x/Math.max(1,mixedPlan?.shelfDiameter || effectiveShelfDiameter)*100)+'%',top:(p.y/Math.max(1,mixedPlan?.shelfDiameter || effectiveShelfDiameter)*100)+'%',width:(p.w/Math.max(1,mixedPlan?.shelfDiameter || effectiveShelfDiameter)*100)+'%',height:(p.h/Math.max(1,mixedPlan?.shelfDiameter || effectiveShelfDiameter)*100)+'%'}} title={p.productName}>{p.productName.replace(/ #\d+$/,'')}</div>)}</div>
             </div>)}
           </div></>}
       </div>
