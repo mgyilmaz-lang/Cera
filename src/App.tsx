@@ -506,6 +506,50 @@ function App() {
         if(tryPlace(shelf,item)) shelves.push(shelf);
       }
 
+      // Yerleşim sonrası lokal repack: aynı raftaki ürünleri farklı sıralarda
+      // yeniden paketleyerek ilk greedy çözümün oluşturduğu ölü cepleri azalt.
+      const repackShelf = (source:ShelfPlan) => {
+        const original=[...source.placements];
+        if(original.length<3) return;
+        const orders=[
+          [...original].sort((a,b)=>(b.w*b.h)-(a.w*a.h)),
+          [...original].sort((a,b)=>(a.w*a.h)-(b.w*b.h)),
+          [...original].sort((a,b)=>Math.max(b.w,b.h)-Math.max(a.w,a.h)),
+          [...original].sort((a,b)=>(b.w+b.h)-(a.w+a.h))
+        ];
+        if(sourceProducts.length>1){
+          orders.push([...original].sort((a,b)=>a.productId-b.productId));
+          orders.push([...original].sort((a,b)=>b.productId-a.productId));
+        }
+        const scoreShelf=(s:ShelfPlan) => {
+          const area=s.placements.reduce((sum,p)=>sum+(isRect(p.shape)?p.w*p.h:Math.PI*(p.w/2)*(p.h/2)),0);
+          // Aynı adet korunurken kenara/komşuya daha kompakt düzeni tercih et.
+          let gapSum=0;
+          for(let i=0;i<s.placements.length;i++){
+            let nearest=shelfDiameter;
+            for(let j=0;j<s.placements.length;j++) if(i!==j) nearest=Math.min(nearest,gapToPlacement(s.placements[i],s.placements[j]));
+            gapSum+=nearest;
+          }
+          return area*1000-gapSum*10;
+        };
+        let best:ShelfPlan|null=null;
+        for(const order of orders){
+          const trial:ShelfPlan={level:source.level,heightUsed:0,recommendedSpacing:source.recommendedSpacing,placements:[],utilization:0,emptyArea:0,filledArea:0};
+          for(const old of order){
+            const item:Item={
+              productId:old.productId,productName:old.productName,shape:old.shape,
+              w:old.w,h:old.h,vertical:source.heightUsed,index:0
+            };
+            tryPlace(trial,item);
+          }
+          if(trial.placements.length!==original.length) continue;
+          trial.heightUsed=source.heightUsed;
+          if(!best||scoreShelf(trial)>scoreShelf(best)) best=trial;
+        }
+        if(best) source.placements=best.placements;
+      };
+
+      shelves.forEach(repackShelf);
       shelves.forEach(s=>{
         s.recommendedSpacing=s.heightUsed+gap;
         s.filledArea=s.placements.reduce((sum,p)=>sum+(isRect(p.shape)?p.w*p.h:Math.PI*(p.w/2)*(p.h/2)),0);
