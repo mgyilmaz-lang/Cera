@@ -665,9 +665,12 @@ function App() {
       <p className="muted">Amaç: ürünleri raf içine sığdırmak, birbirine değdirmemek ve kullanılabilir alanı mümkün olduğunca verimli kullanmak.</p>
 
       <div className="fields">
+        <label className="field"><span>Fırın modeli</span><div><select value={kilnIndex} onChange={e => { const next=Number(e.target.value); setKilnIndex(next); setShelfSize(kilns[next].shelfDiameter); }}><option value="">Fırın seçin</option>{kilns.map((x,i) => <option key={x.name} value={i}>{x.brand} · {x.name} · {x.volume} L</option>)}</select></div></label>
         <Field label="Raf ölçüsü" value={shelfSize} set={setShelfSize} suffix="mm"/>
         <label className="field"><span>Raf aralığı</span><div><select value={shelfGap} onChange={e => setShelfGap(Number(e.target.value))}>{rackGapOptions.map(o => <option key={o.gap} value={o.gap}>{o.gap} mm · {o.label}{o.gap === recommendedRackGap ? ' ★' : ''}</option>)}{!rackGapOptions.some(o => o.gap===shelfGap) && <option value={shelfGap}>{shelfGap} mm · Özel</option>}</select><b>mm</b></div></label>
       </div>
+
+      <div className="kilnSelectedInfo"><span>SEÇİLİ FIRIN</span><b>{kiln.brand} {kiln.name}</b><small>{kiln.volume} L · Ø {kiln.diameter} mm iç çap · Ø {kiln.shelfDiameter} mm raf · {kiln.height} mm iç yükseklik · {kiln.power} kW · max {kiln.maxTemp}°C</small></div>
 
       <div className="kilnProductSource">
         <div><span>ÜRÜN 1 · ÇAMURDAN</span><b>{kilnProducts[0] ? kilnProducts[0].name+' · '+kilnProducts[0].shape+' · '+(kilnProducts[0].shape==='Silindir'||kilnProducts[0].shape==='Kase / Kupa' ? 'Ø '+kilnProducts[0].diameter : kilnProducts[0].width+' × '+(kilnProducts[0].shape==='Kare'?kilnProducts[0].width:kilnProducts[0].depth))+' × '+kilnProducts[0].height+' mm · '+kilnProducts[0].pieces+' adet' : 'Tanımlanmadı'}</b></div>
