@@ -339,8 +339,8 @@ function App() {
     const shelfArea = Math.max(10000, shelfSize * shelfSize);
     const totalFootprintArea = active.reduce((sum,p) => {
       const w = Math.max(20, p.shape === 'Dikdörtgen' ? p.width : p.diameter);
-      const d = Math.max(20, p.diameter);
-      const area = p.shape === 'Dikdörtgen' ? w * d : Math.PI * (d / 2) * (d / 2);
+      const d = Math.max(20, p.shape === 'Dikdörtgen' ? p.depth : p.shape === 'Kare' ? p.width : p.diameter);
+      const area = (p.shape === 'Dikdörtgen' || p.shape === 'Kare') ? w * d : Math.PI * (d / 2) * (d / 2);
       return sum + area * p.pieces;
     }, 0);
     const avgArea = totalFootprintArea / Math.max(1, totalPieces);
