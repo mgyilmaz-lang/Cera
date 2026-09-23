@@ -641,17 +641,101 @@ function App() {
 
     {tab === 'uyum' && <section className="panel wide"><div className="productTabs compact"><div className="productTabButtons">{products.map((p,i) => <button key={p.id} className={activeProductIndex===i?'active':''} onClick={() => setActiveProductIndex(i)}>{p.name}</button>)}</div></div><h2>Akıllı Çamur + Sır + Fırın Uyumluluğu</h2><div className={compatibility.ok?'bigOk':'bigWarn'}>{compatibility.ok?'UYUMLU ARALIK':'UYUMSUZ ARALIK'}</div><div className="compatGrid"><div><small>Çamur</small><b>{tempRange(clay.min,clay.max)}</b></div><div><small>Sır</small><b>{tempRange(glaze.min,glaze.max)}</b></div><div><small>Fırın</small><b>{kiln.maxTemp}°C</b></div><div><small>Ortak çalışma</small><b>{compatibility.ok ? tempRange(compatibility.low,compatibility.high) : 'Yok'}</b></div></div><p className="note">Bu motor yalnızca verilen teknik aralıkların kesişimini kontrol eder. Termal genleşme, atmosfer, uygulama kalınlığı ve koni sonucu ayrıca test edilmelidir.</p></section>}
 
-    {tab === 'yukleme' && <section className="panel wide loadPlanner"><div className="productTabs compact"><div className="productTabButtons">{products.map((p,i) => <button key={p.id} className={activeProductIndex===i?'active':''} onClick={() => setActiveProductIndex(i)}>{p.name}</button>)}</div><div className="productHint">Seçili ürünün ölçüleri aşağıdaki fırın hesabına aktarılır.</div></div><span className="eyebrow">FIRIN YÜKLEME</span><h2>Raf ölçüleri</h2><p className="muted">Ürün ölçüleri Çamur sekmesinden otomatik gelir.</p><div className="fields"><Field label="Raf ölçüsü" value={shelfSize} set={setShelfSize} suffix="mm"/><label className="field"><span>Raf aralığı</span><div><select value={shelfGap} onChange={e => setShelfGap(Number(e.target.value))}>{rackGapOptions.map(o => <option key={o.gap} value={o.gap}>{o.gap} mm · {o.label}{o.gap === recommendedRackGap ? ' ★ Önerilen' : ''}</option>)}{!rackGapOptions.some(o => o.gap === shelfGap) && <option value={shelfGap}>{shelfGap} mm · Özel</option>}</select><b>mm</b></div></label></div><div className="kilnProductSource"><div><span>ÇAMURDAN AKTARILAN ÜRÜN 1</span><b>{kilnProducts[0] ? kilnProducts[0].shape+' · '+(kilnProducts[0].shape==='Silindir'||kilnProducts[0].shape==='Kase / Kupa' ? 'Çap '+kilnProducts[0].diameter : 'En '+kilnProducts[0].width+' × Boy '+kilnProducts[0].depth)+' × Yükseklik '+kilnProducts[0].height+' mm · '+kilnProducts[0].pieces+' adet' : 'Tanımlanmadı'}</b></div><div><span>ÇAMURDAN AKTARILAN ÜRÜN 2</span><b>{kilnProducts[1] ? kilnProducts[1].shape+' · '+(kilnProducts[1].shape==='Silindir'||kilnProducts[1].shape==='Kase / Kupa' ? 'Çap '+kilnProducts[1].diameter : 'En '+kilnProducts[1].width+' × Boy '+kilnProducts[1].depth)+' × Yükseklik '+kilnProducts[1].height+' mm · '+kilnProducts[1].pieces+' adet' : 'İkinci ürün ekleyin'}</b></div></div><div className="loadSummary"><div><span>Raf başına yaklaşık</span><b>{shelfCapacity} ürün</b></div><div><span>Ürün grubu</span><b>{products.reduce((sum,p) => sum + p.pieces, 0)} adet</b></div><div><span>Raf aralığı</span><b>{shelfGap} mm</b></div><div><span>Fırında yerleşebilecek raf</span><b>{selectedShelfCount} raf</b></div></div>
-        <div className="kilnShelfInfo"><div><span>FIRIN İÇ ÖLÇÜSÜ</span><b>Ø {kiln.diameter} × {kiln.height} mm</b></div><div><span>ÖNERİLEN RAF ÇAPI</span><b>Ø {usableShelfDiameter} mm</b><small>İç çaptan {kilnEdgeClearance * 2} mm güvenlik payı</small></div><div><span>ÖNERİLEN RAF SAYISI</span><strong>{recommendedShelfCount} raf</strong><small>{recommendedRackGap} mm aralık · {shelfThickness} mm raf kalınlığı</small></div><div><span>MEVCUT AYAR</span><strong>{selectedShelfCount} raf</strong><small>{shelfGap} mm aralık ile</small></div></div>
-        <div className="rackOptionGrid">{rackGapOptions.slice(0,4).map(o => <button key={o.gap} className={shelfGap===o.gap ? 'rackOption active' : 'rackOption'} onClick={() => setShelfGap(o.gap)}><span>{o.label}{o.gap===recommendedRackGap && <b>★ Önerilen</b>}</span><strong>{o.gap} mm</strong><small>{o.requiredLevels} raf seviyesi · yaklaşık {o.capacity} ürün kapasitesi{o.fits ? ' · ✓ sığıyor' : ' · ⚠ kapasite yetmiyor'}</small></button>)}</div>
-        <div className="loadTable"><div className="loadTableHead"><span>Ürün</span><span>Adet</span><span>Raf / seviye</span><span>Yerleşebilir kapasite</span></div>{productLoadPlans.map(p => <div className="loadTableRow" key={p.id}><b>{p.name}</b><span>{p.pieces}</span><span>{p.fitsVertical ? p.perShelf+' / '+p.requiredLevels : 'UYUMSUZ'}</span><span>{p.fitsVertical ? p.capacity : '⚠️ '+p.height+' mm > '+shelfGap+' mm'}</span></div>)}</div>
-        {productLoadPlans.some(p=>!p.fitsVertical) && <div className="loadWarning">⚠️ Raf aralığı, bazı ürünlerin yüksekliğinden küçük. Raf aralığını en az ürün yüksekliği + güvenlik payı olacak şekilde artırın.</div>}
-        <div className="loadTotal"><span>Aynı pişirimde planlanan toplam</span><b>{products.reduce((sum,p) => sum + p.pieces, 0)} ürün</b></div>
-        <div className="combinationBox"><div className="combinationHead"><div><span className="eyebrow">OTOMATİK YERLEŞTİRME</span><h3>Ürün 1 / Ürün 2 / Karma raf yerleşimi</h3><p className="muted">Çamur sekmesindeki ilk iki ürünün gerçek ölçülerini kullanır. Ürünler birbirine değmeden minimum 8 mm güvenlik boşluğu bırakılır. Üçüncü seçenek iki ürünü aynı raflarda karıştırarak kullanılabilir alanı en verimli şekilde doldurmayı hedefler.</p></div></div>
-        <div className="rackRecommendation"><div><span className="eyebrow">RAF ARALIĞI ÖNERİSİ</span><b>{recommendedRackGap} mm</b><small>Ürün yüksekliği + güvenlik payı + adet/fırın kapasitesi.</small></div><div><span>Fırına sığan raf</span><strong>{recommendedShelfCount} raf</strong><small>İç yükseklik {kiln.height} mm</small></div><div><span>Seviye / kapasite</span><strong>{rackGapOptions.find(x => x.gap===recommendedRackGap)?.requiredLevels || 0} / {rackGapOptions.find(x => x.gap===recommendedRackGap)?.capacity || 0}</strong><small>Ø {usableShelfDiameter} mm raf önerisi</small></div></div>
-        <div className="combinationList">{loadCombinations.map((x,i) => <div className={x.name.startsWith('Karma')?'combinationRow recommended':'combinationRow'} key={x.name}><div><b>{x.name}</b>{x.name.startsWith('Karma') && <span className="comboBadge">Karma / En verimli</span>}<small>{x.placedCount} ürün yerleşti · {x.unplaced} ürün dışarıda · {x.totalLevels} raf seviyesi · {x.utilization}% doluluk · boş alan {Math.round(x.emptyArea).toLocaleString('tr-TR')} mm²</small></div><strong>%{x.utilization}</strong><span>{x.shelves.map(s => 'Raf '+s.level+': '+s.placements.length+' ürün · '+s.recommendedSpacing+' mm').join(' · ')}</span></div>)}</div>
-        {loadCombinations[2] && <div className="shelfPlanList"><div className="planTitle">Karma yerleşimin raf planı</div>{loadCombinations[2].shelves.map(s => <div className="shelfPlan" key={s.level}><div className="shelfPlanHead"><b>Raf {s.level}</b><span>%{s.utilization} doluluk · {s.heightUsed} mm dikey alan · boş {Math.round(s.emptyArea).toLocaleString('tr-TR')} mm²</span></div><div className="rackMap shelfMap">{s.placements.map(p => <div key={p.productName} className={'rackItem '+((p.shape==='Dikdörtgen'||p.shape==='Kare')?'rectangle':'circle')} style={{left:(p.x/usableShelfDiameter*100)+'%',top:(p.y/usableShelfDiameter*100)+'%',width:(p.w/usableShelfDiameter*100)+'%',height:(p.h/usableShelfDiameter*100)+'%'}} title={p.productName}>{p.productName.replace(/ #\d+$/,'')}</div>)}</div></div>)}</div>}</div>
-        <p className="note">Raf sayısı fırının gerçek iç yüksekliğinden hesaplanır. Yerleşim motoru her raf için ürünlerin taban alanını, şekli ve adetini birlikte değerlendirerek boş alanı minimize etmeye çalışır. Dikdörtgen ürünlerde yön değiştirme de denenir. Amaç rafı %100 doldurmak değil, ürünler arasında ısı dolaşımı ve güvenlik boşluğunu korurken kullanılabilir alanı mümkün olduğunca verimli kullanmaktır.</p></section>}
+    {tab === 'yukleme' && <section className="panel wide loadPlanner">
+      <div className="productTabs compact">
+        <div className="productTabButtons">{products.map((p,i) => <button key={p.id} className={activeProductIndex===i?'active':''} onClick={() => setActiveProductIndex(i)}>{p.name}</button>)}</div>
+        <div className="productHint">Fırın planı yalnızca Çamur sekmesindeki ilk iki ürünü kullanır. Ölçü, şekil ve adetler otomatik aktarılır.</div>
+      </div>
+      <span className="eyebrow">FIRIN YÜKLEME</span>
+      <h2>Gerçek ölçüye göre raf yerleşimi</h2>
+      <p className="muted">Amaç: ürünleri raf içine sığdırmak, birbirine değdirmemek ve kullanılabilir alanı mümkün olduğunca verimli kullanmak.</p>
+
+      <div className="fields">
+        <Field label="Raf ölçüsü" value={shelfSize} set={setShelfSize} suffix="mm"/>
+        <label className="field"><span>Raf aralığı</span><div><select value={shelfGap} onChange={e => setShelfGap(Number(e.target.value))}>{rackGapOptions.map(o => <option key={o.gap} value={o.gap}>{o.gap} mm · {o.label}{o.gap === recommendedRackGap ? ' ★' : ''}</option>)}{!rackGapOptions.some(o => o.gap===shelfGap) && <option value={shelfGap}>{shelfGap} mm · Özel</option>}</select><b>mm</b></div></label>
+      </div>
+
+      <div className="kilnProductSource">
+        <div><span>ÜRÜN 1 · ÇAMURDAN</span><b>{kilnProducts[0] ? kilnProducts[0].name+' · '+kilnProducts[0].shape+' · '+(kilnProducts[0].shape==='Silindir'||kilnProducts[0].shape==='Kase / Kupa' ? 'Ø '+kilnProducts[0].diameter : kilnProducts[0].width+' × '+(kilnProducts[0].shape==='Kare'?kilnProducts[0].width:kilnProducts[0].depth))+' × '+kilnProducts[0].height+' mm · '+kilnProducts[0].pieces+' adet' : 'Tanımlanmadı'}</b></div>
+        <div><span>ÜRÜN 2 · ÇAMURDAN</span><b>{kilnProducts[1] ? kilnProducts[1].name+' · '+kilnProducts[1].shape+' · '+(kilnProducts[1].shape==='Silindir'||kilnProducts[1].shape==='Kase / Kupa' ? 'Ø '+kilnProducts[1].diameter : kilnProducts[1].width+' × '+(kilnProducts[1].shape==='Kare'?kilnProducts[1].width:kilnProducts[1].depth))+' × '+kilnProducts[1].height+' mm · '+kilnProducts[1].pieces+' adet' : 'Çamur sekmesinden ikinci ürün ekleyin'}</b></div>
+      </div>
+
+      <div className="loadSummary">
+        <div><span>Fırın içi</span><b>Ø {kiln.diameter} × {kiln.height} mm</b></div>
+        <div><span>Kullanılabilir raf</span><b>Ø {usableShelfDiameter} mm</b></div>
+        <div><span>Önerilen aralık</span><b>{recommendedRackGap} mm</b></div>
+        <div><span>Önerilen raf</span><b>{recommendedShelfCount} seviye</b></div>
+      </div>
+
+      <div className="kilnShelfInfo">
+        <div><span>RAF ÇAPI</span><b>Ø {usableShelfDiameter} mm</b><small>Fırın iç çapından {kilnEdgeClearance * 2} mm kenar payı</small></div>
+        <div><span>ÖNERİLEN ARALIK</span><strong>{recommendedRackGap} mm</strong><small>En yüksek ürün + 10 mm güvenlik payı üzerinden adaylanır</small></div>
+        <div><span>ÖNERİLEN RAF</span><strong>{recommendedShelfCount} seviye</strong><small>Gerçek yerleşim sonucuna göre</small></div>
+        <div><span>SEÇİLİ ARALIK</span><strong>{shelfGap} mm</strong><small>{selectedShelfCount} seviye teorik raf kapasitesi</small></div>
+      </div>
+
+      <div className="rackOptionGrid">
+        {rackGapOptions.slice(0,6).map(o => <button key={o.gap} className={shelfGap===o.gap ? 'rackOption active' : 'rackOption'} onClick={() => setShelfGap(o.gap)}>
+          <span>{o.label}{o.gap===recommendedRackGap && <b>★ Önerilen</b>}</span>
+          <strong>{o.gap} mm</strong>
+          <small>{o.requiredLevels} gerçek raf · {o.capacity} ürün yerleşti{o.fits ? ' · ✓ tüm adet sığıyor' : ' · ⚠ bazı ürünler sığmıyor'}</small>
+        </button>)}
+      </div>
+
+      <div className="loadTable">
+        <div className="loadTableHead"><span>Plan</span><span>Adet</span><span>Raf</span><span>Durum</span></div>
+        {loadCombinations.slice(0,2).map((combo,i) => <div className="loadTableRow" key={combo.recommended.name}>
+          <b>{combo.recommended.name}</b>
+          <span>{kilnProducts[i]?.pieces || 0}</span>
+          <span>{combo.recommended.totalLevels}</span>
+          <span>{combo.recommended.unplaced===0 ? '✓ Tamamı yerleşiyor' : '⚠ '+combo.recommended.unplaced+' adet dışarıda'}</span>
+        </div>)}
+      </div>
+
+      <div className="combinationBox">
+        <div className="combinationHead">
+          <div>
+            <span className="eyebrow">3. SEÇENEK · KARMA</span>
+            <h3>Ürün 1 + Ürün 2 aynı raflarda</h3>
+            <p className="muted">Motor, iki ürünün gerçek taban ölçülerini birlikte değerlendirir. Her ürün arasında en az 8 mm boşluk bırakılır. Dikdörtgen ürünlerde 90° dönüş denenir. Farklı sıralama ve raf aralıkları karşılaştırılarak daha az dışarıda kalan ürün, daha az raf ve daha yüksek doluluk sağlayan plan seçilir.</p>
+          </div>
+          <span className="comboBadge">KARMA PLAN</span>
+        </div>
+
+        {kilnProducts.length < 2 ? <div className="loadWarning">Önce Çamur sekmesinden Ürün 2'yi ekleyin. Karma yerleşim iki ürünü aynı raf üzerinde hesaplar.</div> :
+          <><div className="rackRecommendation">
+            <div><span className="eyebrow">KARMA ÖNERİSİ</span><b>{mixedPlan?.gap || recommendedRackGap} mm</b><small>Raf aralığı</small></div>
+            <div><span>Yerleşen</span><strong>{mixedPlan?.placedCount || 0} / {mixedPlan?.totalPieces || 0}</strong><small>{mixedPlan?.unplaced ? mixedPlan.unplaced+' adet dışarıda' : 'Tüm adetler yerleşiyor'}</small></div>
+            <div><span>Raf</span><strong>{mixedPlan?.totalLevels || 0}</strong><small>gerçek raf seviyesi</small></div>
+            <div><span>Doluluk</span><strong>%{mixedPlan?.utilization || 0}</strong><small>raf taban alanı</small></div>
+          </div>
+
+          <div className="combinationList">
+            {loadCombinations.slice(0,2).map(x => <div className="combinationRow" key={x.recommended.name}>
+              <div><b>{x.recommended.name}</b><small>{x.recommended.placedCount} yerleşti · {x.recommended.unplaced} dışarıda · {x.recommended.totalLevels} raf · %{x.recommended.utilization} doluluk</small></div>
+              <strong>%{x.recommended.utilization}</strong>
+            </div>)}
+            <div className="combinationRow recommended">
+              <div><b>3. Karma · Ürün 1 + Ürün 2</b><span className="comboBadge">OTOMATİK SEÇİLDİ</span><small>{mixedPlan?.placedCount || 0} yerleşti · {mixedPlan?.unplaced || 0} dışarıda · {mixedPlan?.totalLevels || 0} raf · %{mixedPlan?.utilization || 0} doluluk · ürünler arası 8 mm</small></div>
+              <strong>%{mixedPlan?.utilization || 0}</strong>
+            </div>
+          </div>
+
+          <div className="shelfPlanList">
+            <div className="planTitle">Karma yerleşimin gerçek raf planı</div>
+            {(mixedPlan?.shelves || []).map(s => <div className="shelfPlan" key={s.level}>
+              <div className="shelfPlanHead"><b>Raf {s.level}</b><span>{s.placements.length} ürün · %{s.utilization} doluluk · {s.heightUsed} mm ürün yüksekliği · {s.recommendedSpacing} mm önerilen raf aralığı</span></div>
+              <div className="shelfMixCounts">{Object.entries(mixedPlan?.counts || {}).map(([id,count]) => {
+                const p=kilnProducts.find(x=>String(x.id)===String(id));
+                return p && count ? <span key={id}>{p.name}: <b>{count}</b></span> : null;
+              })}</div>
+              <div className="rackMap shelfMap">{s.placements.map(p => <div key={p.productName} className={'rackItem '+(p.shape==='Dikdörtgen'||p.shape==='Kare'?'rectangle':'circle')} style={{left:(p.x/Math.max(1,usableShelfDiameter)*100)+'%',top:(p.y/Math.max(1,usableShelfDiameter)*100)+'%',width:(p.w/Math.max(1,usableShelfDiameter)*100)+'%',height:(p.h/Math.max(1,usableShelfDiameter)*100)+'%'}} title={p.productName}>{p.productName.replace(/ #\d+$/,'')}</div>)}</div>
+            </div>)}
+          </div></>}
+      </div>
+
+      <p className="note">Bu planlama üretim öncesi yerleşim önerisidir. 8 mm ürün aralığı ve fırın kenar payı ayarlanabilir güvenlik varsayımlarıdır. Raf kalınlığı 10 mm, alt/üst 10 mm boşluk varsayılmıştır. Gerçek raf ayakları, termal genleşme, fırın üreticisinin yükleme kuralları ve ürünün kulp/ayak gibi çıkıntıları ayrıca kontrol edilmelidir.</p>
+    </section>}
 
     {tab === 'sir' && <section className="glazeCalc"><div className="productTabs compact"><div className="productTabButtons">{products.map((p,i) => <button key={p.id} className={activeProductIndex===i?'active':''} onClick={() => setActiveProductIndex(i)}>{p.name}</button>)}</div><div className="productHint">Sır yüzeyi ve tüketimi seçili ürünün ölçülerinden hesaplanır.</div></div><div className="glazeHead"><div><span className="eyebrow">SIR TÜKETİMİ</span><h2>Sır miktarını kolayca hesaplayın</h2><p className="muted">Yüzey alanı Çamur sekmesindeki ürün ölçülerinden otomatik hesaplanır.</p></div><span className="glazeIcon">◇</span></div><div className="glazeGrid"><div className="glazeInputs"><div className="glazeCard"><h3>Sır Seçimi</h3><label className="field"><span>Marka / seri</span><select value={glazeIndex} onChange={e => setGlazeIndex(Number(e.target.value))}>{glazes.map((x,i)=><option key={x.code} value={i}>{x.brand} · {x.code} · {x.name}</option>)}</select></label><div className="glazeMeta"><span>Uygulama aralığı</span><b>{tempRange(glaze.min,glaze.max)}</b><span>Yüzey</span><b>{glaze.finish}</b><span>Fiyat</span><b>{glaze.price > 0 ? glaze.price.toFixed(2) + ' TL/kg' : 'Fiyat girilmeli'}</b></div></div><div className="glazeCard"><h3>Uygulama Bilgileri</h3><div className="fields"><label className="field"><span>Yüzey alanı / ürün</span><div><input type="number" value={glazeSurface.toFixed(3)} readOnly/><b>m²</b></div></label><Field label="Kat sayısı" value={coatCount} set={setCoatCount} suffix="kat"/><Field label="Fire / atık" value={waste} set={setWaste} suffix="%"/><Field label="Ürün adedi" value={pieces} set={setPieces} suffix="adet"/></div><div className="dimensionSource"><span>Çamur sekmesinden gelen ölçüler</span><b>{shape} · En {width} mm · Boy {height} mm · Çap {diameter} mm · Et {wallThickness} mm</b></div></div></div><aside className="glazeResult"><div className="resultHeader"><span className="eyebrow">SONUÇ</span><span className="resultIcon">◇</span></div><div className="resultRows"><div><span>Yüzey / ürün</span><b>{(glazeSurface * 10000).toFixed(0)} cm²</b></div><div className="resultHighlight"><span>Sır / ürün</span><b>{glazeCalc.perPiece.toFixed(1)} g</b></div><div><span>Toplam sır · {pieces} adet</span><b>{Math.round(glazeCalc.grams).toLocaleString('tr-TR')} g</b></div><div><span>Toplam</span><b>{(glazeCalc.grams / 1000).toFixed(2)} kg</b></div><div><span>Sır maliyeti</span><b>{glaze.price > 0 ? money(glazeCalc.cost) : 'Fiyat girilmeli'}</b></div></div><div className="glazeInfo">ⓘ Hesap, ürünün dış ve iç yüzeyleri ile et kalınlığına göre yaklaşık yapılır. Kulp, ayak ve özel detaylar ayrıca fark yaratabilir.</div><button className="transferBtn" onClick={() => setTab('camur')}>▣ Çamur ölçülerine dön <span>→</span></button></aside></div></section>}
 
