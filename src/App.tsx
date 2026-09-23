@@ -1,6 +1,31 @@
 import { useEffect, useMemo, useState } from 'react';
 
 type FieldProps = { label:string; value:number; set:(n:number)=>void; suffix:string };
+type ProductPreviewProps = { shape: ProductSpec['shape']; width:number; diameter:number; height:number; wallThickness:number };
+
+const ProductPreview = ({ shape, width, diameter, height, wallThickness }: ProductPreviewProps) => {
+  const maxW = Math.max(20, shape === 'Dikdörtgen' ? width : diameter);
+  const scale = Math.min(150 / maxW, 120 / Math.max(20, height));
+  const w = maxW * scale;
+  const h = Math.max(20, height) * scale;
+  const x = (240 - w) / 2;
+  const y = 132 - h;
+  const rim = Math.max(3, Math.min(10, wallThickness * scale));
+  return <div className="productPreview"><div className="productPreviewHead"><span>TAHMİNİ ÜRÜN FORMU</span><b>{shape}</b></div><svg viewBox="0 0 240 160" role="img" aria-label="Ürünün ölçülere göre tahmini form görünümü">
+    {shape === 'Dikdörtgen' ? <>
+      <rect x={x} y={y} width={w} height={h} rx={Math.min(12, w*0.06)} className="previewShape"/><rect x={x+rim} y={y+rim} width={Math.max(2,w-2*rim)} height={Math.max(2,h-2*rim)} rx={Math.min(10, w*0.05)} className="previewInner"/>
+    </> : shape === 'Kase / Kupa' ? <>
+      <path d={`M ${x} ${y+8} Q 120 ${y+h*0.45} ${x+w} ${y+8} L ${x+w*0.82} ${y+h*0.88} Q 120 ${y+h} ${x+w*0.18} ${y+h*0.88} Z`} className="previewShape"/><ellipse cx="120" cy={y+8} rx={w/2} ry="8" className="previewRim"/><path d={`M ${x+rim} ${y+10} Q 120 ${y+h*0.43} ${x+w-rim} ${y+10}`} className="previewInnerLine"/>
+    </> : <>
+      <path d={`M ${x} ${y+8} L ${x+w} ${y+8} L ${x+w*0.92} ${y+h} L ${x+w*0.08} ${y+h} Z`} className="previewShape"/><ellipse cx="120" cy={y+8} rx={w/2} ry="8" className="previewRim"/><ellipse cx="120" cy={y+8} rx={Math.max(3,w/2-rim)} ry="4.5" className="previewInner"/>
+    </>}
+    <line x1="20" y1="145" x2="220" y2="145" className="previewDimension"/>
+    <text x="120" y="157" textAnchor="middle" className="previewText">{shape === 'Dikdörtgen' ? width : diameter} mm</text>
+    <line x1="205" y1={y} x2="205" y2={y+h} className="previewDimension"/>
+    <text x="212" y={y+h/2} className="previewText" transform={`rotate(90 212 ${y+h/2})`}>{height} mm</text>
+  </svg><small>Ölçülere göre yaklaşık siluet. Gerçek ürün kalıbı, ayak, kulp ve detayları içermez.</small></div>;
+};
+
 
 const Field = ({ label, value, set, suffix }: FieldProps) => (
   <label className="field"><span>{label}</span><div><input type="number" min="0" value={value} onChange={e => set(Number(e.target.value))}/><b>{suffix}</b></div></label>
@@ -131,7 +156,6 @@ function App() {
     setActiveProductIndex(products.length);
   };
   const [glazeAmount, setGlazeAmount] = useState(180);
-  const [electric, setElectric] = useState(4.5);
   const [hours, setHours] = useState(8);
   const [fill, setFill] = useState(80);
   const [fireCount, setFireCount] = useState(1);
@@ -212,7 +236,11 @@ function App() {
     const density = bodyType.toLocaleLowerCase('tr-TR').includes('porselen') ? 2.45 : bodyType.toLocaleLowerCase('tr-TR').includes('seramik') ? 2.05 : 2.20;
     const theoretical = volumeCm3 * density;
     const working = theoretical * 1.18;
-    return { volumeCm3, theoretical, working, total: working * pieces };
+    const perPieceKg = working / 1000;
+    const totalKg = (working * pieces) / 1000;
+    const packageWeightKg = Math.max(0.1, clay.packageWeightKg || 10);
+    const packages = Math.ceil(totalKg / packageWeightKg);
+    return { volumeCm3, theoretical, working, total: working * pieces, perPieceKg, totalKg, packageWeightKg, packages };
   }, [shape, height, width, diameter, wallThickness, bodyType, pieces]);
 
   const compatibility = useMemo(() => {
@@ -258,12 +286,11 @@ function App() {
   const costs = useMemo(() => {
     const effectiveClayWeight = clayEstimate.working > 0 ? clayEstimate.working : clayWeight;
     const clayCost = effectiveClayWeight * pieces / 1000 * clay.price;
-    const electricity = kiln.power * hours * electric * (0.35 + fill / 150) * fireCount;
-    const total = clayCost + electricity + packaging * pieces;
+    const total = clayCost + packaging * pieces;
     const unit = total / Math.max(pieces, 1);
     const netSale = salePrice * pieces * (1 - commission / 100);
-    return { clayCost, electricity, total, unit, netSale, profit: netSale - total, margin: netSale ? (netSale - total) / netSale * 100 : 0 };
-  }, [clayWeight, clayEstimate, clay, kiln, hours, electric, fill, fireCount, packaging, pieces, salePrice, commission]);
+    return { clayCost, total, unit, netSale, profit: netSale - total, margin: netSale ? (netSale - total) / netSale * 100 : 0 };
+  }, [clayWeight, clayEstimate, clay, packaging, pieces, salePrice, commission]);
 
   const productLoadPlans = useMemo(() => products.map(p => {
     const footprint = Math.max(20, p.shape === 'Dikdörtgen' ? Math.max(p.width, p.diameter) : p.diameter);
@@ -395,7 +422,7 @@ function App() {
   }
 
   function addLog() {
-    setLogs([{ date: new Date().toLocaleString('tr-TR'), kiln: kiln.brand + ' ' + kiln.name, temp: firingTemp, hours, pieces, cost: costs.electricity, note: 'Üretim kaydı' }, ...logs]);
+    setLogs([{ date: new Date().toLocaleString('tr-TR'), kiln: kiln.brand + ' ' + kiln.name, temp: firingTemp, hours, pieces, cost: costs.total, note: 'Üretim kaydı' }, ...logs]);
   }
 
   return <main>
@@ -418,12 +445,13 @@ function App() {
         <div className="productTabs"><div className="productTabButtons">{products.map((p,i) => <button key={p.id} className={activeProductIndex===i?'active':''} onClick={() => setActiveProductIndex(i)}>{p.name}</button>)}{products.length < 3 && <button className="addProduct" onClick={addProduct}>＋ Ürün {products.length + 1}</button>}</div><div className="productHint">Her ürünün ölçüsü, çamuru ve adedi ayrı tutulur. Diğer sekmeler seçili ürünü otomatik kullanır.</div></div>
         <h2>Ürün ölçüsü</h2>
         <div className="fields"><label className="field"><span>Ürün şekli</span><select value={shape} onChange={e => setShape(e.target.value as typeof shape)}><option>Silindir</option><option>Kase / Kupa</option><option>Dikdörtgen</option></select></label><label className="field"><span>Çamur cinsi</span><select value={bodyType} onChange={e => setBodyType(e.target.value)}><option>Seramik</option><option>Stoneware</option><option>Porselen</option></select></label><Field label="Yükseklik" value={height} set={setHeight} suffix="mm"/><Field label="Genişlik" value={width} set={setWidth} suffix="mm"/><Field label="Çap" value={diameter} set={setDiameter} suffix="mm"/><Field label="Et kalınlığı" value={wallThickness} set={setWallThickness} suffix="mm"/><Field label="Ürün adedi" value={pieces} set={setPieces} suffix="adet"/></div>
-        <div className="okBox">Tahmini çamur: <b>{Math.round(clayEstimate.working)} g / ürün</b> · parti: <b>{Math.round(clayEstimate.total)} g</b>. Hesapta %18 şekillendirme/fire payı bulunur.</div>
-        {!liteMode && <div className="cards"><div><span>Teorik çamur</span><strong>{Math.round(clayEstimate.theoretical)} g</strong></div><div><span>Çalışma paylı</span><strong>{Math.round(clayEstimate.working)} g</strong></div><div><span>Parti</span><strong>{Math.round(clayEstimate.total)} g</strong></div></div>}
+        <div className="okBox">Tahmini çamur: <b>{clayEstimate.perPieceKg.toFixed(2)} kg / ürün</b> · parti: <b>{clayEstimate.totalKg.toFixed(2)} kg</b> · <b>{clayEstimate.packages} paket</b> ({clayEstimate.packageWeightKg} kg/paket). Hesapta %18 şekillendirme/fire payı bulunur.</div>
+        <ProductPreview shape={shape} width={width} diameter={diameter} height={height} wallThickness={wallThickness}/>
+        {!liteMode && <div className="cards"><div><span>Ürün başı</span><strong>{clayEstimate.perPieceKg.toFixed(2)} kg</strong></div><div><span>Parti</span><strong>{clayEstimate.totalKg.toFixed(2)} kg</strong></div><div><span>Gerekli paket</span><strong>{clayEstimate.packages} × {clayEstimate.packageWeightKg} kg</strong></div></div>}
         <p className="note">Yaklaşık sonuçtur. Kulp, ayak ve özel detaylar ayrıca çamur/sır miktarını değiştirebilir.</p>
       </div>
       <aside className="result"><span className="eyebrow">TAHMİNİ SONUÇ</span><div className="heroValue">{money(costs.unit)}</div><div className="muted">ürün başı toplam maliyet</div>
-        <div className="cards"><div><span>Çamur · {Math.round(clayEstimate.working)} g/ürün</span><strong>{money(costs.clayCost)}</strong></div><div><span>Elektrik</span><strong>{money(costs.electricity)}</strong></div></div>
+        <div className="cards"><div><span>Çamur · {clayEstimate.perPieceKg.toFixed(2)} kg/ürün</span><strong>{money(costs.clayCost)}</strong></div><div><span>Paket</span><strong>{clayEstimate.packages} adet</strong></div></div>
         <div className="price"><span>Parti maliyeti</span><strong>{money(costs.total)}</strong></div>
 
         <p className="note">Elektrik tüketimi tahmindir. Gerçek kWh, fırın programı, izolasyon, ortam ve yükleme biçimine göre değişir. Üretici teknik verisi ve test plakası esas alınmalıdır.</p>
@@ -436,12 +464,12 @@ function App() {
         <div className="costSelectors"><label className="field"><span>Çamur</span><select value={clayIndex} onChange={e => setClayIndex(Number(e.target.value))}>{clays.map((x,i)=><option key={x.id} value={i}>{x.code} · {x.name}</option>)}</select></label><label className="field"><span>Fırın</span><select value={kilnIndex} onChange={e => setKilnIndex(Number(e.target.value))}>{kilns.map((x,i)=><option key={x.name} value={i}>{x.brand} {x.name}</option>)}</select></label></div>
         <div className="meta">Çamur: {clay.name} · Fırın: {kiln.name}</div>
         <h2>Üretim</h2>
-        <div className="fields"><Field label="Ürün adedi" value={pieces} set={setPieces} suffix="adet"/><Field label="Fırın doluluğu" value={fill} set={setFill} suffix="%"/></div>
+        <div className="fields"><Field label="Ürün adedi" value={pieces} set={setPieces} suffix="adet"/></div>
         <h2>Pişirim</h2>
-        <div className="fields"><Field label="Süre" value={hours} set={setHours} suffix="saat"/><Field label="Elektrik" value={electric} set={setElectric} suffix="₺/kWh"/><Field label="Pişirim" value={fireCount} set={setFireCount} suffix="kez"/><Field label="Sıcaklık" value={firingTemp} set={setFiringTemp} suffix="°C"/></div>
+        <div className="fields"><Field label="Süre" value={hours} set={setHours} suffix="saat"/><Field label="Pişirim" value={fireCount} set={setFireCount} suffix="kez"/><Field label="Sıcaklık" value={firingTemp} set={setFiringTemp} suffix="°C"/></div>
         <div className="infoBox">ⓘ Sır maliyeti bu hesaplamaya dahil değildir. Sır tüketimi ve sır maliyetini <b>Sır Tüketimi</b> sekmesinde ayrıca hesaplayabilirsiniz.</div>
       </div>
-      <aside className="result costResult"><span className="eyebrow">TAHMİNİ SONUÇ</span><div className="heroValue">{money(costs.unit)}</div><div className="muted">ürün başı çamur + pişirim maliyeti</div><div className="cards"><div><span>Çamur</span><strong>{money(costs.clayCost)}</strong></div><div><span>Elektrik</span><strong>{money(costs.electricity)}</strong></div></div><div className="price"><span>Parti maliyeti</span><strong>{money(costs.total)}</strong></div><p className="note">Ambalaj maliyeti varsa parti hesabına ayrıca eklenir. Sır maliyeti ayrı modülde hesaplanır.</p></aside>
+      <aside className="result costResult"><span className="eyebrow">TAHMİNİ SONUÇ</span><div className="heroValue">{money(costs.unit)}</div><div className="muted">ürün başı çamur + ambalaj maliyeti</div><div className="cards"><div><span>Çamur</span><strong>{money(costs.clayCost)}</strong></div><div><span>Ambalaj</span><strong>{money(packaging * pieces)}</strong></div></div><div className="price"><span>Parti maliyeti</span><strong>{money(costs.total)}</strong></div><p className="note">Ambalaj maliyeti varsa parti hesabına ayrıca eklenir. Sır maliyeti ayrı modülde hesaplanır.</p></aside>
     </section>}
 
     {tab === 'uyum' && <section className="panel wide"><div className="productTabs compact"><div className="productTabButtons">{products.map((p,i) => <button key={p.id} className={activeProductIndex===i?'active':''} onClick={() => setActiveProductIndex(i)}>{p.name}</button>)}</div></div><h2>Akıllı Çamur + Sır + Fırın Uyumluluğu</h2><div className={compatibility.ok?'bigOk':'bigWarn'}>{compatibility.ok?'UYUMLU ARALIK':'UYUMSUZ ARALIK'}</div><div className="compatGrid"><div><small>Çamur</small><b>{tempRange(clay.min,clay.max)}</b></div><div><small>Sır</small><b>{tempRange(glaze.min,glaze.max)}</b></div><div><small>Fırın</small><b>{kiln.maxTemp}°C</b></div><div><small>Ortak çalışma</small><b>{compatibility.ok ? tempRange(compatibility.low,compatibility.high) : 'Yok'}</b></div></div><p className="note">Bu motor yalnızca verilen teknik aralıkların kesişimini kontrol eder. Termal genleşme, atmosfer, uygulama kalınlığı ve koni sonucu ayrıca test edilmelidir.</p></section>}
