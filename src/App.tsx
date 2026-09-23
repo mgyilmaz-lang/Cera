@@ -547,7 +547,7 @@ function App() {
       b.utilization-a.utilization ||
       a.totalLevels-b.totalLevels
     );
-  }, [products, shelfSize, shelfGap, kiln.height, kiln.diameter]);]);
+  }, [products, shelfSize, shelfGap, kiln.height, kiln.diameter]);
   async function refreshSources() {
     setBusy(true);
     try {
