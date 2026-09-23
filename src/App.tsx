@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 type FieldProps = { label:string; value:number; set:(n:number)=>void; suffix:string };
 type ProductPreviewProps = { shape: ProductSpec['shape']; width:number; diameter:number; height:number; wallThickness:number };
 
-const ProductPreview = ({ shape, width, diameter, height, wallThickness }: ProductPreviewProps) => {
+const ProductPreview = ({ shape, width, depth, diameter, height, wallThickness }: ProductPreviewProps) => {
   const maxW = Math.max(20, shape === 'Dikdörtgen' ? width : diameter);
   const scale = Math.min(150 / maxW, 120 / Math.max(20, height));
   const w = maxW * scale;
@@ -126,8 +126,8 @@ function App() {
   const [clayDetailId, setClayDetailId] = useState(clays[0].id);
   const [glazeIndex, setGlazeIndex] = useState(0);
   const [kilnIndex, setKilnIndex] = useState(3);
-  type ProductSpec = { id: number; name: string; clayIndex: number; shape: 'Silindir' | 'Kase / Kupa' | 'Dikdörtgen'; height: number; width: number; diameter: number; wallThickness: number; pieces: number; bodyType: string };
-  const makeProduct = (id: number, source?: ProductSpec): ProductSpec => ({ id, name: 'Ürün ' + id, clayIndex: source?.clayIndex ?? 0, shape: source?.shape ?? 'Silindir', height: source?.height ?? 100, width: source?.width ?? 80, diameter: source?.diameter ?? 80, wallThickness: source?.wallThickness ?? 4, pieces: source?.pieces ?? 12, bodyType: source?.bodyType ?? 'Stoneware' });
+  type ProductSpec = { id: number; name: string; clayIndex: number; shape: 'Silindir' | 'Kase / Kupa' | 'Dikdörtgen'; height: number; width: number; depth: number; diameter: number; wallThickness: number; pieces: number; bodyType: string };
+  const makeProduct = (id: number, source?: ProductSpec): ProductSpec => ({ id, name: 'Ürün ' + id, clayIndex: source?.clayIndex ?? 0, shape: source?.shape ?? 'Silindir', height: source?.height ?? 100, width: source?.width ?? 80, depth: source?.depth ?? 80, diameter: source?.diameter ?? 80, wallThickness: source?.wallThickness ?? 4, pieces: source?.pieces ?? 12, bodyType: source?.bodyType ?? 'Stoneware' });
   const [products, setProducts] = useState<ProductSpec[]>([makeProduct(1)]);
   const [activeProductIndex, setActiveProductIndex] = useState(0);
   const activeProduct = products[activeProductIndex] || products[0];
@@ -143,6 +143,8 @@ function App() {
   const setHeight = (n: number) => updateProduct({ height: n });
   const width = activeProduct.width;
   const setWidth = (n: number) => updateProduct({ width: n });
+  const depth = activeProduct.depth;
+  const setDepth = (n: number) => updateProduct({ depth: n });
   const diameter = activeProduct.diameter;
   const setDiameter = (n: number) => updateProduct({ diameter: n });
   const wallThickness = activeProduct.wallThickness;
@@ -231,7 +233,7 @@ function App() {
       volumeCm3 = Math.PI * (r * r - ri * ri) * h * 0.72;
     } else {
       const w = Math.max(1, width);
-      const d = Math.max(1, diameter);
+      const d = Math.max(1, depth);
       const h = Math.max(1, height);
       const wi = Math.max(0, w - 2 * t);
       const di = Math.max(0, d - 2 * t);
@@ -267,7 +269,7 @@ function App() {
       packages,
       totalGr: perPieceGr * Math.max(0, pieces)
     };
-  }, [shape, height, width, diameter, wallThickness, bodyType, clay, pieces]);
+  }, [shape, height, width, depth, diameter, wallThickness, bodyType, clay, pieces]);
   const compatibility = useMemo(() => {
     const low = Math.max(clay.min, glaze.min);
     const high = Math.min(clay.max, glaze.max, kiln.maxTemp);
@@ -279,7 +281,7 @@ function App() {
   const glazeSurface = useMemo(() => {
     const h = Math.max(1, height) / 1000;
     const w = Math.max(1, width) / 1000;
-    const d = Math.max(1, diameter) / 1000;
+    const d = Math.max(1, depth) / 1000;
     const t = Math.max(1, wallThickness) / 1000;
     const innerD = Math.max(0.001, d - 2 * t);
     const innerW = Math.max(0.001, w - 2 * t);
@@ -300,7 +302,7 @@ function App() {
       area = (outerSide + innerSide + topBottom) * 0.72;
     }
     return Math.max(0.001, area);
-  }, [shape, height, width, diameter, wallThickness]);
+  }, [shape, height, width, depth, diameter, wallThickness]);
 
   const glazeCalc = useMemo(() => {
     const grams = Math.max(0, glazeSurface * applicationRate * coatCount * (1 + waste / 100) * pieces);
@@ -318,14 +320,14 @@ function App() {
   }, [clayWeight, clayEstimate, clay, packaging, pieces, salePrice, commission]);
 
   const productLoadPlans = useMemo(() => products.map(p => {
-    const footprint = Math.max(20, p.shape === 'Dikdörtgen' ? Math.max(p.width, p.diameter) : p.diameter);
+    const footprint = Math.max(20, p.shape === 'Dikdörtgen' ? Math.max(p.width, p.depth) : p.diameter);
     const across = Math.max(1, Math.floor((Math.max(20, shelfSize) + shelfGap) / (footprint + shelfGap)));
     const perShelf = across * across;
     const fitsVertical = p.height <= shelfGap;
     const shelfLevels = fitsVertical ? Math.max(1, Math.floor((kiln.height + shelfGap) / (p.height + shelfGap))) : 0;
     const capacity = fitsVertical ? perShelf * shelfLevels : 0;
     const requiredLevels = fitsVertical ? Math.max(1, Math.ceil(p.pieces / Math.max(1, perShelf))) : 0;
-    return { id:p.id, name:p.name, pieces:p.pieces, diameter:p.diameter, height:p.height, perShelf, shelfLevels, capacity, requiredLevels, fitsVertical };
+    return { id:p.id, name:p.name, pieces:p.pieces, diameter:p.diameter, width:p.width, depth:p.depth, height:p.height, perShelf, shelfLevels, capacity, requiredLevels, fitsVertical };
   }), [products, shelfSize, shelfGap, kiln.height]);
 
   const rackGapOptions = useMemo(() => {
@@ -395,7 +397,7 @@ function App() {
       productName:p.name+' #'+(i+1),
       shape:p.shape,
       w:Math.max(20,p.shape==='Dikdörtgen'?p.width:p.diameter),
-      h:Math.max(20,p.shape==='Dikdörtgen'?p.diameter:p.diameter),
+      h:Math.max(20,p.shape==='Dikdörtgen'?p.depth:p.diameter),
       vertical:Math.max(20,p.height),
       index:i
     })));
@@ -611,9 +613,9 @@ function App() {
 
         <div className="productTabs"><div className="productTabButtons">{products.map((p,i) => <button key={p.id} className={activeProductIndex===i?'active':''} onClick={() => setActiveProductIndex(i)}>{p.name}</button>)}{products.length < 3 && <button className="addProduct" onClick={addProduct}>＋ Ürün {products.length + 1}</button>}</div><div className="productHint">Her ürünün ölçüsü, çamuru ve adedi ayrı tutulur. Diğer sekmeler seçili ürünü otomatik kullanır.</div></div>
         <h2>Ürün ölçüsü</h2>
-        <div className="fields"><label className="field"><span>Ürün şekli</span><select value={shape} onChange={e => setShape(e.target.value as typeof shape)}><option>Silindir</option><option>Kase / Kupa</option><option>Dikdörtgen</option></select></label><label className="field"><span>Çamur cinsi</span><select value={bodyType} onChange={e => setBodyType(e.target.value)}><option>Seramik</option><option>Stoneware</option><option>Porselen</option></select></label><Field label="Yükseklik" value={height} set={setHeight} suffix="mm"/><Field label="Genişlik" value={width} set={setWidth} suffix="mm"/><Field label="Çap" value={diameter} set={setDiameter} suffix="mm"/><Field label="Et kalınlığı" value={wallThickness} set={setWallThickness} suffix="mm"/><Field label="Ürün adedi" value={pieces} set={setPieces} suffix="adet"/></div>
+        <div className="fields"><label className="field"><span>Ürün şekli</span><select value={shape} onChange={e => setShape(e.target.value as typeof shape)}><option>Silindir</option><option>Kase / Kupa</option><option>Dikdörtgen</option></select></label><label className="field"><span>Çamur cinsi</span><select value={bodyType} onChange={e => setBodyType(e.target.value)}><option>Seramik</option><option>Stoneware</option><option>Porselen</option></select></label><Field label="Yükseklik" value={height} set={setHeight} suffix="mm"/><Field label="Genişlik" value={width} set={setWidth} suffix="mm"/>{shape === 'Dikdörtgen' ? <Field label="Derinlik" value={depth} set={setDepth} suffix="mm"/> : <Field label="Çap" value={diameter} set={setDiameter} suffix="mm"/>}<Field label="Et kalınlığı" value={wallThickness} set={setWallThickness} suffix="mm"/><Field label="Ürün adedi" value={pieces} set={setPieces} suffix="adet"/></div>
         <div className="okBox">Tahmini çamur: <b>{clayEstimate.perPieceKg.toFixed(2)} kg / ürün</b> · parti: <b>{clayEstimate.totalKg.toFixed(2)} kg</b> · <b>{clayEstimate.packages} paket</b> ({clayEstimate.packageWeightKg} kg/paket). Hesapta %18 şekillendirme/fire payı bulunur.</div>
-        <ProductPreview shape={shape} width={width} diameter={diameter} height={height} wallThickness={wallThickness}/>
+        <ProductPreview shape={shape} width={width} depth={depth} diameter={diameter} height={height} wallThickness={wallThickness}/>
         {!liteMode && <div className="cards"><div><span>Ürün başı</span><strong>{clayEstimate.perPieceKg.toFixed(2)} kg</strong></div><div><span>Parti</span><strong>{clayEstimate.totalKg.toFixed(2)} kg</strong></div><div><span>Gerekli paket</span><strong>{clayEstimate.packages} × {clayEstimate.packageWeightKg} kg</strong></div></div>}
         <p className="note">Yaklaşık sonuçtur. Kulp, ayak ve özel detaylar ayrıca çamur/sır miktarını değiştirebilir.</p>
       </div>
