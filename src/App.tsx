@@ -219,18 +219,18 @@ function App() {
 
   const clayEstimate = useMemo(() => {
     const t = Math.max(0.5, wallThickness);
-    let volumeCm3 = 0;
+    let volumeMm3 = 0;
+
     if (shape === 'Silindir') {
       const r = Math.max(1, diameter / 2);
       const ri = Math.max(0, r - t);
       const h = Math.max(1, height);
-      volumeCm3 = Math.PI * (r * r - ri * ri) * h;
+      volumeMm3 = Math.PI * (r * r - ri * ri) * h;
     } else if (shape === 'Kase / Kupa') {
       const r = Math.max(1, diameter / 2);
       const ri = Math.max(0, r - t);
       const h = Math.max(1, height);
-      // Kase/kupa için gövdeyi açık üstlü kabuk olarak tahmin ediyoruz.
-      volumeCm3 = Math.PI * (r * r - ri * ri) * h * 0.72;
+      volumeMm3 = Math.PI * (r * r - ri * ri) * h * 0.72;
     } else {
       const w = Math.max(1, width);
       const d = Math.max(1, shape === 'Kare' ? width : depth);
@@ -238,12 +238,12 @@ function App() {
       const wi = Math.max(0, w - 2 * t);
       const di = Math.max(0, d - 2 * t);
       const hi = Math.max(0, h - t);
-      volumeCm3 = Math.max(0, w * d * h - wi * di * hi);
+      volumeMm3 = Math.max(0, w * d * h - wi * di * hi);
     }
 
-    // Ham/plastik çamur yoğunluğu yaklaşık değeridir. Ürün bazlı teknik veri
-    // mevcut olduğunda ayrıca tanımlanabilir. Buradaki değerler fired yoğunluk değil,
-    // çamur ağırlığını tahmin etmek için daha düşük çalışma yoğunluklarıdır.
+    // 1 cm³ = 1000 mm³. Önce gerçek hacmi cm³'e çeviriyoruz,
+    // sonra yaklaşık plastik çamur yoğunluğu ile gram hesabı yapıyoruz.
+    const volumeCm3 = volumeMm3 / 1000;
     const clayName = (clay.name + ' ' + clay.type + ' ' + bodyType).toLocaleLowerCase('tr-TR');
     const density = clayName.includes('porselen') || clayName.includes('limoges') ? 1.80
       : clayName.includes('stoneware') ? 1.85
@@ -253,7 +253,8 @@ function App() {
     const theoreticalGr = volumeCm3 * density;
     const workingAllowance = 1.10;
     const perPieceGr = theoreticalGr * workingAllowance;
-    const totalKg = (perPieceGr * Math.max(0, pieces)) / 1000;
+    const totalGr = perPieceGr * Math.max(0, pieces);
+    const totalKg = totalGr / 1000;
     const packageWeightKg = Math.max(0.1, clay.packageWeightKg || 10);
     const packages = Math.ceil(totalKg / packageWeightKg);
 
@@ -264,10 +265,10 @@ function App() {
       perPieceGr,
       perPieceKg: perPieceGr / 1000,
       working: perPieceGr,
+      totalGr,
       totalKg,
       packageWeightKg,
-      packages,
-      totalGr: perPieceGr * Math.max(0, pieces)
+      packages
     };
   }, [shape, height, width, depth, diameter, wallThickness, bodyType, clay, pieces]);
   const compatibility = useMemo(() => {
@@ -614,7 +615,7 @@ function App() {
         <div className="productTabs"><div className="productTabButtons">{products.map((p,i) => <button key={p.id} className={activeProductIndex===i?'active':''} onClick={() => setActiveProductIndex(i)}>{p.name}</button>)}{products.length < 3 && <button className="addProduct" onClick={addProduct}>＋ Ürün {products.length + 1}</button>}</div><div className="productHint">Her ürünün ölçüsü, çamuru ve adedi ayrı tutulur. Diğer sekmeler seçili ürünü otomatik kullanır.</div></div>
         <h2>Ürün ölçüsü</h2>
         <div className="fields"><label className="field"><span>Ürün şekli</span><select value={shape} onChange={e => setShape(e.target.value as typeof shape)}><option>Silindir</option><option>Kare</option><option>Dikdörtgen</option><option>Kase / Kupa</option></select></label><label className="field"><span>Çamur cinsi</span><select value={bodyType} onChange={e => setBodyType(e.target.value)}><option>Seramik</option><option>Stoneware</option><option>Porselen</option></select></label><Field label="Yükseklik" value={height} set={setHeight} suffix="mm"/>{shape === 'Silindir' || shape === 'Kase / Kupa' ? <Field label="Çap" value={diameter} set={setDiameter} suffix="mm"/> : <><Field label="En" value={width} set={setWidth} suffix="mm"/><Field label="Boy / Derinlik" value={depth} set={setDepth} suffix="mm"/>{shape === 'Kare' && <small className="fieldHint">Kare için En ve Boy aynı kabul edilir.</small>}</>}<Field label="Et kalınlığı" value={wallThickness} set={setWallThickness} suffix="mm"/><Field label="Ürün adedi" value={pieces} set={setPieces} suffix="adet"/></div>
-        <div className="okBox">Tahmini çamur: <b>{clayEstimate.perPieceKg.toFixed(2)} kg / ürün</b> · parti: <b>{clayEstimate.totalKg.toFixed(2)} kg</b> · <b>{clayEstimate.packages} paket</b> ({clayEstimate.packageWeightKg} kg/paket). Hesapta %18 şekillendirme/fire payı bulunur.</div>
+        <div className="okBox">Tahmini çamur: <b>{clayEstimate.perPieceKg.toFixed(2)} kg / ürün</b> · parti: <b>{clayEstimate.totalKg.toFixed(2)} kg</b> · <b>{clayEstimate.packages} paket</b> ({clayEstimate.packageWeightKg} kg/paket). Hesapta %10 şekillendirme payı bulunur.</div>
         <ProductPreview shape={shape} width={width} depth={depth} diameter={diameter} height={height} wallThickness={wallThickness}/>
         {!liteMode && <div className="cards"><div><span>Ürün başı</span><strong>{clayEstimate.perPieceKg.toFixed(2)} kg</strong></div><div><span>Parti</span><strong>{clayEstimate.totalKg.toFixed(2)} kg</strong></div><div><span>Gerekli paket</span><strong>{clayEstimate.packages} × {clayEstimate.packageWeightKg} kg</strong></div></div>}
         <p className="note">Yaklaşık sonuçtur. Kulp, ayak ve özel detaylar ayrıca çamur/sır miktarını değiştirebilir.</p>
