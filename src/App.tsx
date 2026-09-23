@@ -369,16 +369,16 @@ function App() {
       return Math.hypot(cx-nx,cy-ny)<circle.w/2+clearance;
     };
 
-    const buildPlan=(sourceProducts:ProductSpec[],name:string,mode:'areaDesc'|'areaAsc'|'sideDesc'|'alternating',gap:number):LoadPlan => {
+    const buildPlan=(sourceProducts:ProductSpec[],name:string,mode:'areaDesc'|'areaAsc'|'sideDesc'|'widthDesc'|'heightDesc'|'perimeterDesc'|'alternating'|'alternatingReverse',gap:number):LoadPlan => {
       const items=makeItems(sourceProducts);
       let sorted:Item[];
-      if(mode==='alternating' && sourceProducts.length>1){
-        // Karma yerleşimde tek ürünü tamamen bitirmiyoruz. Ürün tiplerini
-        // dönüşümlü besleyerek ikinci ürünün ilk ürünün bıraktığı cepleri
-        // değerlendirmesine izin veriyoruz.
+      if((mode==='alternating'||mode==='alternatingReverse') && sourceProducts.length>1){
+        // Karma yerleşimde farklı başlangıç sıralarını da deniyoruz. Böylece
+        // Ürün 1'in ilk hamlesi Ürün 2'nin kullanabileceği cebi gereksiz yere kapatmaz.
         const queues=sourceProducts.map(p=>items.filter(x=>x.productId===p.id).sort((a,b)=>
           (b.w*b.h)-(a.w*a.h)
         ));
+        if(mode==='alternatingReverse') queues.reverse();
         sorted=[];
         let active=true;
         while(active){
@@ -393,6 +393,9 @@ function App() {
           const aa=a.w*a.h,bb=b.w*b.h;
           if(mode==='areaAsc') return aa-bb;
           if(mode==='sideDesc') return Math.max(b.w,b.h)-Math.max(a.w,a.h)||bb-aa;
+          if(mode==='widthDesc') return b.w-a.w||bb-aa;
+          if(mode==='heightDesc') return b.h-a.h||bb-aa;
+          if(mode==='perimeterDesc') return (b.w+b.h)-(a.w+a.h)||bb-aa;
           return bb-aa;
         });
       }
@@ -525,7 +528,7 @@ function App() {
     };
 
     const chooseBest=(source:ProductSpec[],name:string)=>{
-      const modes:['areaDesc','areaAsc','sideDesc','alternating']=['areaDesc','areaAsc','sideDesc','alternating'];
+      const modes:['areaDesc','areaAsc','sideDesc','widthDesc','heightDesc','perimeterDesc','alternating','alternatingReverse']=['areaDesc','areaAsc','sideDesc','widthDesc','heightDesc','perimeterDesc','alternating','alternatingReverse'];
       const all:LoadPlan[]=[];
       for(const gap of gapCandidates) for(const mode of modes) all.push(buildPlan(source,name,mode,gap));
       const better=(a:LoadPlan,b:LoadPlan)=>{
