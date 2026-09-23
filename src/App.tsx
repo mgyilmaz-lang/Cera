@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 
 type FieldProps = { label:string; value:number; set:(n:number)=>void; suffix:string };
-type ProductPreviewProps = { shape: ProductSpec['shape']; width:number; diameter:number; height:number; wallThickness:number };
+type ProductPreviewProps = { shape: ProductSpec['shape']; width:number; depth:number; diameter:number; height:number; wallThickness:number };
 
 const ProductPreview = ({ shape, width, depth, diameter, height, wallThickness }: ProductPreviewProps) => {
-  const maxW = Math.max(20, shape === 'Dikdörtgen' ? width : diameter);
+  const maxW = Math.max(20, shape === 'Dikdörtgen' || shape === 'Kare' ? width : diameter);
   const scale = Math.min(150 / maxW, 120 / Math.max(20, height));
   const w = maxW * scale;
   const h = Math.max(20, height) * scale;
