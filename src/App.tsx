@@ -281,7 +281,7 @@ function App() {
   const glazeSurface = useMemo(() => {
     const h = Math.max(1, height) / 1000;
     const w = Math.max(1, width) / 1000;
-    const d = Math.max(1, depth) / 1000;
+    const d = Math.max(1, shape === 'Dikdörtgen' ? depth : diameter) / 1000;
     const t = Math.max(1, wallThickness) / 1000;
     const innerD = Math.max(0.001, d - 2 * t);
     const innerW = Math.max(0.001, w - 2 * t);
