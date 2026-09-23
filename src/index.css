@@ -77,3 +77,6 @@
 .kilnShelfInfo small{font-size:10px;color:#778078;line-height:1.3}
 @media(max-width:800px){.kilnShelfInfo{grid-template-columns:1fr 1fr}}
 @media(max-width:480px){.kilnShelfInfo{grid-template-columns:1fr}}
+
+.combinationHead h3{font-size:19px}
+.shelfPlanHead span{font-size:10px}
