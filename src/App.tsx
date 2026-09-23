@@ -216,7 +216,7 @@ function App() {
   const kiln = kilns[kilnIndex];
 
   const clayEstimate = useMemo(() => {
-    const t = Math.max(1, wallThickness);
+    const t = Math.max(0.5, wallThickness);
     let volumeCm3 = 0;
     if (shape === 'Silindir') {
       const r = Math.max(1, diameter / 2);
@@ -227,6 +227,7 @@ function App() {
       const r = Math.max(1, diameter / 2);
       const ri = Math.max(0, r - t);
       const h = Math.max(1, height);
+      // Kase/kupa için gövdeyi açık üstlü kabuk olarak tahmin ediyoruz.
       volumeCm3 = Math.PI * (r * r - ri * ri) * h * 0.72;
     } else {
       const w = Math.max(1, width);
@@ -237,16 +238,34 @@ function App() {
       const hi = Math.max(0, h - t);
       volumeCm3 = Math.max(0, w * d * h - wi * di * hi);
     }
-    const density = bodyType.toLocaleLowerCase('tr-TR').includes('porselen') ? 2.45 : bodyType.toLocaleLowerCase('tr-TR').includes('seramik') ? 2.05 : 2.20;
-    const theoretical = volumeCm3 * density;
-    const working = theoretical * 1.18;
-    const perPieceKg = working / 1000;
-    const totalKg = (working * pieces) / 1000;
+
+    // Ham/plastik çamur yoğunluğu yaklaşık değeridir. Ürün bazlı teknik veri
+    // mevcut olduğunda ayrıca tanımlanabilir. Buradaki değerler fired yoğunluk değil,
+    // çamur ağırlığını tahmin etmek için daha düşük çalışma yoğunluklarıdır.
+    const clayName = (clay.name + ' ' + clay.type + ' ' + bodyType).toLocaleLowerCase('tr-TR');
+    const density = clayName.includes('porselen') || clayName.includes('limoges') ? 1.80
+      : clayName.includes('stoneware') ? 1.85
+      : clayName.includes('şamot') ? 1.80
+      : 1.78;
+
+    const theoreticalGr = volumeCm3 * density;
+    const workingAllowance = 1.10;
+    const perPieceGr = theoreticalGr * workingAllowance;
+    const totalKg = (perPieceGr * Math.max(0, pieces)) / 1000;
     const packageWeightKg = Math.max(0.1, clay.packageWeightKg || 10);
     const packages = Math.ceil(totalKg / packageWeightKg);
-    return { volumeCm3, theoretical, working, total: working * pieces, perPieceKg, totalKg, packageWeightKg, packages };
-  }, [shape, height, width, diameter, wallThickness, bodyType, pieces]);
 
+    return {
+      volumeCm3,
+      density,
+      theoreticalGr,
+      perPieceGr,
+      totalKg,
+      packageWeightKg,
+      packages,
+      totalGr: perPieceGr * Math.max(0, pieces)
+    };
+  }, [shape, height, width, diameter, wallThickness, bodyType, clay, pieces]);
   const compatibility = useMemo(() => {
     const low = Math.max(clay.min, glaze.min);
     const high = Math.min(clay.max, glaze.max, kiln.maxTemp);
@@ -360,31 +379,51 @@ function App() {
     type Item = { productId:number; productName:string; shape:ProductSpec['shape']; w:number; h:number; vertical:number; index:number };
     type Placement = { productId:number; productName:string; shape:ProductSpec['shape']; x:number; y:number; w:number; h:number; rotated:boolean };
     type ShelfPlan = { level:number; heightUsed:number; recommendedSpacing:number; placements:Placement[]; utilization:number; emptyArea:number; filledArea:number };
-    const shelfW = Math.max(100, shelfSize);
+
+    const shelfDiameter = Math.min(
+      Math.max(100, shelfSize),
+      Math.max(100, kiln.diameter - kilnEdgeClearance * 2)
+    );
+    const R = shelfDiameter / 2;
     const safety = 10;
-    const clearance = Math.max(3, Math.min(10, safety));
+    const clearance = 6;
+
     const items:Item[] = products.flatMap(p => Array.from({length:Math.min(Math.max(0,p.pieces),100)},(_,i)=>({
-      productId:p.id, productName:p.name+' #'+(i+1), shape:p.shape,
+      productId:p.id,
+      productName:p.name+' #'+(i+1),
+      shape:p.shape,
+      // Her ürünün iki yatay ölçüsü birlikte kullanılır:
+      // dikdörtgende genişlik × derinlik, yuvarlakta çap × çap.
       w:Math.max(20,p.shape==='Dikdörtgen'?p.width:p.diameter),
       h:Math.max(20,p.shape==='Dikdörtgen'?p.diameter:p.diameter),
-      vertical:Math.max(20,p.height), index:i
+      vertical:Math.max(20,p.height),
+      index:i
     })));
 
     const variants = [
-      {name:'Sıkı Dolum',rotate:true,sort:'area'},
-      {name:'Karma Dolum',rotate:true,sort:'balanced'},
-      {name:'Büyükten Küçüğe',rotate:true,sort:'width'},
-      {name:'Yüksekleri Grupla',rotate:true,sort:'height'}
+      {name:'Sıkı Karma Dolum',rotate:true,sort:'area'},
+      {name:'Küçüklerle Boşluk Doldur',rotate:true,sort:'smallFirst'},
+      {name:'Büyükten Küçüğe Karma',rotate:true,sort:'width'},
+      {name:'Yükseklik Dengeli',rotate:true,sort:'height'}
     ] as const;
 
+    const rectInsideCircle=(x:number,y:number,w:number,h:number)=>{
+      const cx=x+w/2, cy=y+h/2;
+      const corners=[[x,y],[x+w,y],[x,y+h],[x+w,y+h]];
+      return corners.every(([px,py])=>Math.hypot(px-R,py-R)<=R-clearance);
+    };
+    const circleInsideCircle=(x:number,y:number,w:number)=>{
+      return Math.hypot(x+w/2-R,y+w/2-R)+w/2<=R-clearance;
+    };
     const overlaps=(a:Placement,b:Placement)=>{
-      if(a.shape==='Dikdörtgen'&&b.shape==='Dikdörtgen')
-        return a.x<b.x+b.w+clearance&&a.x+a.w+clearance>b.x&&a.y<b.y+b.h+clearance&&a.y+a.h+clearance>b.y;
       if(a.shape!=='Dikdörtgen'&&b.shape!=='Dikdörtgen'){
-        const ax=a.x+a.w/2,ay=a.y+a.h/2,bx=b.x+b.w/2,by=b.y+b.h/2;
-        return Math.hypot(ax-bx,ay-by)<a.w/2+b.w/2+clearance;
+        return Math.hypot(a.x+a.w/2-(b.x+b.w/2),a.y+a.h/2-(b.y+b.h/2)) < a.w/2+b.w/2+clearance;
       }
-      const circle=a.shape!=='Dikdörtgen'?a:b, rect=a.shape==='Dikdörtgen'?a:b;
+      if(a.shape==='Dikdörtgen'&&b.shape==='Dikdörtgen'){
+        return a.x<b.x+b.w+clearance&&a.x+a.w+clearance>b.x&&a.y<b.y+b.h+clearance&&a.y+a.h+clearance>b.y;
+      }
+      const circle=a.shape!=='Dikdörtgen'?a:b;
+      const rect=a.shape==='Dikdörtgen'?a:b;
       const cx=circle.x+circle.w/2,cy=circle.y+circle.h/2;
       const nx=Math.max(rect.x,Math.min(cx,rect.x+rect.w)),ny=Math.max(rect.y,Math.min(cy,rect.y+rect.h));
       return Math.hypot(cx-nx,cy-ny)<circle.w/2+clearance;
@@ -392,9 +431,9 @@ function App() {
 
     const pack=(variant:typeof variants[number])=>{
       const source=[...items].sort((a,b)=>{
+        if(variant.sort==='smallFirst') return a.w*a.h-b.w*b.h;
         if(variant.sort==='width') return Math.max(b.w,b.h)-Math.max(a.w,a.h);
         if(variant.sort==='height') return b.vertical-a.vertical||b.w*b.h-a.w*a.h;
-        if(variant.sort==='balanced') return (b.vertical*0.45+b.w*b.h*0.55)-(a.vertical*0.45+a.w*a.h*0.55);
         return b.w*b.h-a.w*a.h;
       });
       const shelves:ShelfPlan[]=[];
@@ -405,15 +444,26 @@ function App() {
           ? [{w:item.w,h:item.h,rotated:false},{w:item.h,h:item.w,rotated:true}]
           : [{w:item.w,h:item.h,rotated:false}];
         let best:{placement:Placement;score:number}|null=null;
+
         for(const o of options){
-          if(o.w+2*clearance>shelfW||o.h+2*clearance>shelfW) continue;
-          for(let y=clearance;y+o.h<=shelfW-clearance;y+=2){
-            for(let x=clearance;x+o.w<=shelfW-clearance;x+=2){
+          if(o.w+2*clearance>shelfDiameter||o.h+2*clearance>shelfDiameter) continue;
+          // Merkezden dışa doğru tarama. Her iki yatay boyut da rafın gerçek dairesel
+          // sınırında kontrol edilir.
+          const step=4;
+          for(let y=0;y+o.h<=shelfDiameter;y+=step){
+            for(let x=0;x+o.w<=shelfDiameter;x+=step){
+              const valid=item.shape==='Dikdörtgen'
+                ? rectInsideCircle(x,y,o.w,o.h)
+                : circleInsideCircle(x,y,o.w);
+              if(!valid) continue;
               const p:Placement={productId:item.productId,productName:item.productName,shape:item.shape,x,y,w:o.w,h:o.h,rotated:o.rotated};
               if(shelf.placements.some(q=>overlaps(q,p))) continue;
-              const right=shelfW-(x+o.w), bottom=shelfW-(y+o.h);
-              const edgePenalty=Math.min(right,bottom)*5 + (right+bottom);
-              const score=(shelf.placements.length*1000000) - edgePenalty - (x+y)*0.1;
+
+              const cx=x+o.w/2,cy=y+o.h/2;
+              const centerDist=Math.hypot(cx-R,cy-R);
+              const area=o.w*o.h;
+              // Önce ürün sayısını, sonra boşluğu ve merkeze yakın kompaktlığı optimize et.
+              const score=shelf.placements.length*10000000-area*0.001-centerDist*2;
               if(!best||score>best.score) best={placement:p,score};
             }
           }
@@ -430,10 +480,19 @@ function App() {
         }
         if(placed) continue;
 
-        const currentHeight=shelves.reduce((sum,sh)=>sum+sh.heightUsed,0)+(shelves.length?shelves.length-1:0)*safety;
+        const currentHeight=shelves.reduce((sum,sh)=>sum+sh.heightUsed,0)
+          +(shelves.length?shelves.length-1:0)*safety;
         if(currentHeight+item.vertical+(shelves.length?safety:0)>kiln.height) continue;
 
-        const sh:ShelfPlan={level:shelves.length+1,heightUsed:item.vertical,recommendedSpacing:item.vertical+safety,placements:[],utilization:0,emptyArea:0,filledArea:0};
+        const sh:ShelfPlan={
+          level:shelves.length+1,
+          heightUsed:item.vertical,
+          recommendedSpacing:item.vertical+safety,
+          placements:[],
+          utilization:0,
+          emptyArea:0,
+          filledArea:0
+        };
         if(tryPlace(sh,item)){
           placedIds.add(item.productId+'-'+item.index);
           shelves.push(sh);
@@ -443,17 +502,30 @@ function App() {
       shelves.forEach(sh=>{
         sh.heightUsed=Math.max(...sh.placements.map(p=>products.find(x=>x.id===p.productId)?.height||20));
         sh.recommendedSpacing=sh.heightUsed+safety;
-        sh.filledArea=sh.placements.reduce((n,p)=>n+(p.shape==='Dikdörtgen'?p.w*p.h:Math.PI*(p.w/2)*(p.h/2)),0);
-        sh.emptyArea=Math.max(0,shelfW*shelfW-sh.filledArea);
-        sh.utilization=Math.min(100,Math.round(sh.filledArea/(shelfW*shelfW)*100));
+        sh.filledArea=sh.placements.reduce((n,p)=>n+(p.shape==='Dikdörtgen'
+          ? p.w*p.h
+          : Math.PI*(p.w/2)*(p.h/2)),0);
+        sh.emptyArea=Math.max(0,Math.PI*R*R-sh.filledArea);
+        sh.utilization=Math.min(100,Math.round(sh.filledArea/(Math.PI*R*R)*100));
       });
 
       const placedCount=placedIds.size;
       const requested=items.length;
       const totalArea=shelves.reduce((n,sh)=>n+sh.filledArea,0);
-      const utilization=shelves.length?Math.round(totalArea/(shelves.length*shelfW*shelfW)*100):0;
+      const utilization=shelves.length?Math.round(totalArea/(shelves.length*Math.PI*R*R)*100):0;
       const recommendedSpacing=Math.max(0,...shelves.map(sh=>sh.recommendedSpacing));
-      return {name:variant.name,shelves,placedCount,unplaced:requested-placedCount,utilization,totalLevels:shelves.length,recommendedSpacing,safety,emptyArea:shelves.reduce((n,s)=>n+s.emptyArea,0)};
+      return {
+        name:variant.name,
+        shelves,
+        placedCount,
+        unplaced:requested-placedCount,
+        utilization,
+        totalLevels:shelves.length,
+        recommendedSpacing,
+        safety,
+        emptyArea:shelves.reduce((n,s)=>n+s.emptyArea,0),
+        shelfDiameter
+      };
     };
 
     return variants.map(pack).sort((a,b)=>
@@ -462,7 +534,7 @@ function App() {
       b.utilization-a.utilization ||
       a.totalLevels-b.totalLevels
     );
-  }, [products, shelfSize, kiln.height]);
+  }, [products, shelfSize, kiln.height, kiln.diameter]);]);
   async function refreshSources() {
     setBusy(true);
     try {
@@ -535,7 +607,7 @@ function App() {
         {!liteMode && <div className="cards"><div><span>Ürün başı</span><strong>{clayEstimate.perPieceKg.toFixed(2)} kg</strong></div><div><span>Parti</span><strong>{clayEstimate.totalKg.toFixed(2)} kg</strong></div><div><span>Gerekli paket</span><strong>{clayEstimate.packages} × {clayEstimate.packageWeightKg} kg</strong></div></div>}
         <p className="note">Yaklaşık sonuçtur. Kulp, ayak ve özel detaylar ayrıca çamur/sır miktarını değiştirebilir.</p>
       </div>
-      <aside className="result clayResult"><div className="resultTitle"><span className="resultIcon">▦</span><div><span className="eyebrow">HESAPLAMA SONUÇLARI</span><h2>Sonuçlar</h2></div></div><div className="heroValue">{money(costs.unit)}</div><div className="muted">ürün başı toplam maliyet</div>
+      <aside className="result clayResult"><div className="resultTitle"><span className="resultIcon">▦</span><div><span className="eyebrow">HESAPLAMA SONUÇLARI</span><h2>Sonuçlar</h2></div></div><div className="heroValue">{money(costs.unit)}</div><div className="clayWeightMeta"><span>Birim ağırlık</span><strong>{Math.round(clayEstimate.perPieceGr).toLocaleString('tr-TR')} g</strong><span>Toplam</span><strong>{clayEstimate.totalKg.toFixed(2)} kg</strong><span>Paket</span><strong>{clayEstimate.packages} × {clayEstimate.packageWeightKg} kg</strong></div><div className="muted">ürün başı toplam maliyet</div>
         <div className="cards"><div><span>Çamur · {clayEstimate.perPieceKg.toFixed(2)} kg/ürün</span><strong>{money(costs.clayCost)}</strong></div><div><span>Paket</span><strong>{clayEstimate.packages} adet</strong></div></div>
         <div className="price"><span>Parti maliyeti</span><strong>{money(costs.total)}</strong></div>
 
