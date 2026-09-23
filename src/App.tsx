@@ -371,13 +371,31 @@ function App() {
 
     const buildPlan=(sourceProducts:ProductSpec[],name:string,mode:'areaDesc'|'areaAsc'|'sideDesc'|'alternating',gap:number):LoadPlan => {
       const items=makeItems(sourceProducts);
-      const sorted=[...items].sort((a,b)=>{
-        const aa=a.w*a.h,bb=b.w*b.h;
-        if(mode==='areaAsc') return aa-bb;
-        if(mode==='sideDesc') return Math.max(b.w,b.h)-Math.max(a.w,a.h)||bb-aa;
-        if(mode==='alternating') return Math.max(b.w,b.h)-Math.max(a.w,a.h)||bb-aa;
-        return bb-aa;
-      });
+      let sorted:Item[];
+      if(mode==='alternating' && sourceProducts.length>1){
+        // Karma yerleşimde tek ürünü tamamen bitirmiyoruz. Ürün tiplerini
+        // dönüşümlü besleyerek ikinci ürünün ilk ürünün bıraktığı cepleri
+        // değerlendirmesine izin veriyoruz.
+        const queues=sourceProducts.map(p=>items.filter(x=>x.productId===p.id).sort((a,b)=>
+          (b.w*b.h)-(a.w*a.h)
+        ));
+        sorted=[];
+        let active=true;
+        while(active){
+          active=false;
+          for(const q of queues){
+            const item=q.shift();
+            if(item){sorted.push(item);active=true;}
+          }
+        }
+      } else {
+        sorted=[...items].sort((a,b)=>{
+          const aa=a.w*a.h,bb=b.w*b.h;
+          if(mode==='areaAsc') return aa-bb;
+          if(mode==='sideDesc') return Math.max(b.w,b.h)-Math.max(a.w,a.h)||bb-aa;
+          return bb-aa;
+        });
+      }
       const shelves:ShelfPlan[]=[];
       const scanStep=6;
 
