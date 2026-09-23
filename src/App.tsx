@@ -233,7 +233,7 @@ function App() {
       volumeCm3 = Math.PI * (r * r - ri * ri) * h * 0.72;
     } else {
       const w = Math.max(1, width);
-      const d = Math.max(1, depth);
+      const d = Math.max(1, shape === 'Kare' ? width : depth);
       const h = Math.max(1, height);
       const wi = Math.max(0, w - 2 * t);
       const di = Math.max(0, d - 2 * t);
@@ -396,8 +396,8 @@ function App() {
       productId:p.id,
       productName:p.name+' #'+(i+1),
       shape:p.shape,
-      w:Math.max(20,p.shape==='Dikdörtgen'?p.width:p.diameter),
-      h:Math.max(20,p.shape==='Dikdörtgen'?p.depth:p.diameter),
+      w:Math.max(20,p.shape==='Dikdörtgen'||p.shape==='Kare'?p.width:p.diameter),
+      h:Math.max(20,p.shape==='Dikdörtgen'?p.depth:p.shape==='Kare'?p.width:p.diameter),
       vertical:Math.max(20,p.height),
       index:i
     })));
@@ -613,7 +613,7 @@ function App() {
 
         <div className="productTabs"><div className="productTabButtons">{products.map((p,i) => <button key={p.id} className={activeProductIndex===i?'active':''} onClick={() => setActiveProductIndex(i)}>{p.name}</button>)}{products.length < 3 && <button className="addProduct" onClick={addProduct}>＋ Ürün {products.length + 1}</button>}</div><div className="productHint">Her ürünün ölçüsü, çamuru ve adedi ayrı tutulur. Diğer sekmeler seçili ürünü otomatik kullanır.</div></div>
         <h2>Ürün ölçüsü</h2>
-        <div className="fields"><label className="field"><span>Ürün şekli</span><select value={shape} onChange={e => setShape(e.target.value as typeof shape)}><option>Silindir</option><option>Kare</option><option>Dikdörtgen</option><option>Kase / Kupa</option></select></label><label className="field"><span>Çamur cinsi</span><select value={bodyType} onChange={e => setBodyType(e.target.value)}><option>Seramik</option><option>Stoneware</option><option>Porselen</option></select></label><Field label="Yükseklik" value={height} set={setHeight} suffix="mm"/>{shape === 'Dikdörtgen' ? <><Field label="En" value={width} set={setWidth} suffix="mm"/><Field label="Derinlik" value={depth} set={setDepth} suffix="mm"/></> : <Field label="Çap" value={diameter} set={setDiameter} suffix="mm"/>}<Field label="Et kalınlığı" value={wallThickness} set={setWallThickness} suffix="mm"/><Field label="Ürün adedi" value={pieces} set={setPieces} suffix="adet"/></div>
+        <div className="fields"><label className="field"><span>Ürün şekli</span><select value={shape} onChange={e => setShape(e.target.value as typeof shape)}><option>Silindir</option><option>Kare</option><option>Dikdörtgen</option><option>Kase / Kupa</option></select></label><label className="field"><span>Çamur cinsi</span><select value={bodyType} onChange={e => setBodyType(e.target.value)}><option>Seramik</option><option>Stoneware</option><option>Porselen</option></select></label><Field label="Yükseklik" value={height} set={setHeight} suffix="mm"/>{shape === 'Silindir' || shape === 'Kase / Kupa' ? <Field label="Çap" value={diameter} set={setDiameter} suffix="mm"/> : <><Field label="En" value={width} set={setWidth} suffix="mm"/><Field label="Boy / Derinlik" value={depth} set={setDepth} suffix="mm"/>{shape === 'Kare' && <small className="fieldHint">Kare için En ve Boy aynı kabul edilir.</small>}</>}<Field label="Et kalınlığı" value={wallThickness} set={setWallThickness} suffix="mm"/><Field label="Ürün adedi" value={pieces} set={setPieces} suffix="adet"/></div>
         <div className="okBox">Tahmini çamur: <b>{clayEstimate.perPieceKg.toFixed(2)} kg / ürün</b> · parti: <b>{clayEstimate.totalKg.toFixed(2)} kg</b> · <b>{clayEstimate.packages} paket</b> ({clayEstimate.packageWeightKg} kg/paket). Hesapta %18 şekillendirme/fire payı bulunur.</div>
         <ProductPreview shape={shape} width={width} depth={depth} diameter={diameter} height={height} wallThickness={wallThickness}/>
         {!liteMode && <div className="cards"><div><span>Ürün başı</span><strong>{clayEstimate.perPieceKg.toFixed(2)} kg</strong></div><div><span>Parti</span><strong>{clayEstimate.totalKg.toFixed(2)} kg</strong></div><div><span>Gerekli paket</span><strong>{clayEstimate.packages} × {clayEstimate.packageWeightKg} kg</strong></div></div>}
