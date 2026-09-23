@@ -464,11 +464,18 @@ function App() {
             for(const q of shelf.placements) nearestGap=Math.min(nearestGap,gapToPlacement(p,q));
             const compactness=1/(nearestGap+1);
             const centerDist=Math.hypot(x+o.w/2-R,y+o.h/2-R);
-            // Önce gerçek temas ceplerini doldur, ancak aynı anda dairesel rafın
-            // kenarına gereksiz boşluk bırakmayan ve ürünleri birbirine yakın tutan
-            // adayları tercih et.
+            // Bir adayın yalnızca tek komşuya değil, kaç komşuya ve raf sınırına
+            // temas ettiğini de puanlıyoruz. Böylece oluşan boşlukların parçalanması azalır.
+            const boundaryContacts=[
+              Math.abs(x-clearance)<scanStep,
+              Math.abs(y-clearance)<scanStep,
+              Math.abs((shelfDiameter-(x+o.w))-clearance)<scanStep,
+              Math.abs((shelfDiameter-(y+o.h))-clearance)<scanStep
+            ].filter(Boolean).length;
+            const neighborContacts=shelf.placements.filter(q=>gapToPlacement(p,q)<=scanStep+1).length;
+            const contactScore=boundaryContacts*2+neighborContacts*3;
             const edgePenalty=Math.max(0,Math.min(x,y,shelfDiameter-(x+o.w),shelfDiameter-(y+o.h))-clearance);
-            const score=compactness*100000-edgePenalty*180-centerDist*0.08;
+            const score=contactScore*5000+compactness*100000-edgePenalty*180-centerDist*0.08;
             if(!best||score>best.score) best={p,score};
           }
         }
