@@ -494,13 +494,13 @@ function App() {
         for(const shelf of shelves){
           const newHeight=Math.max(shelf.heightUsed,item.vertical);
           const total=shelves.reduce((sum,s)=>sum+(s===shelf?newHeight:s.heightUsed),0)+Math.max(0,shelves.length-1)*gap;
-          if(total>usableHeight) continue;
+          if(total + shelves.length*shelfThickness > usableHeight) continue;
           if(tryPlace(shelf,item)){placed=true;break;}
         }
         if(placed) continue;
 
         const total=shelves.reduce((sum,s)=>sum+s.heightUsed,0)+item.vertical+shelves.length*gap;
-        if(total>usableHeight) continue;
+        if(total + (shelves.length+1)*shelfThickness > usableHeight) continue;
 
         const shelf:ShelfPlan={level:shelves.length+1,heightUsed:item.vertical,recommendedSpacing:item.vertical+gap,placements:[],utilization:0,emptyArea:0,filledArea:0};
         if(tryPlace(shelf,item)) shelves.push(shelf);
@@ -594,7 +594,7 @@ function App() {
       chooseBest(kilnProducts.slice(1,2),'Ürün 2 Yerleşimi'),
       chooseBest(kilnProducts,'Karma Yerleşim · Ürün 1 + Ürün 2')
     ];
-  }, [kilnProducts,shelfSize,shelfGap,kiln.height,kiln.diameter,gapCandidates]);
+  }, [kilnProducts,shelfSize,shelfGap,kiln.height,kiln.diameter,kiln.shelfDiameter,gapCandidates]);
 
   const mixedPlan=loadCombinations[2]?.recommended||null;
 
