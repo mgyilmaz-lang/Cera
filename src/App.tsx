@@ -543,6 +543,58 @@ function App() {
   }, [kilnProducts,shelfSize,shelfGap,kiln.height,kiln.diameter,gapCandidates]);
 
   const mixedPlan=loadCombinations[2]?.recommended||null;
+
+  const freePocketAnalysis = useMemo(() => {
+    if (!mixedPlan?.shelves?.length) return { maxDiameter: 0, countAtMax: 0, shelves: [] as any[] };
+    const R = mixedPlan.shelfDiameter / 2;
+    const clearance = 8;
+    const isRectShape = (s: ProductSpec['shape']) => s === 'Dikdörtgen' || s === 'Kare';
+    const fitsCircle = (x:number,y:number,d:number,s:any[]) => {
+      if (Math.hypot(x-R,y-R) + d/2 > R-clearance) return false;
+      const cx=x, cy=y;
+      return !s.some(p => {
+        const px=p.x+p.w/2, py=p.y+p.h/2;
+        const nx=Math.max(p.x,Math.min(cx,p.x+p.w));
+        const ny=Math.max(p.y,Math.min(cy,p.y+p.h));
+        const rr=isRectShape(p.shape) ? 0 : p.w/2;
+        return isRectShape(p.shape)
+          ? Math.hypot(cx-nx,cy-ny) < d/2+clearance
+          : Math.hypot(cx-px,cy-py) < d/2+rr+clearance;
+      });
+    };
+    const shelfResults = mixedPlan.shelves.map((s:any) => {
+      let best=0;
+      for(let d=Math.min(160,mixedPlan.shelfDiameter-2*clearance); d>=20; d-=2){
+        let found=false;
+        for(let y=clearance+d/2; y<=mixedPlan.shelfDiameter-clearance-d/2 && !found; y+=4){
+          for(let x=clearance+d/2; x<=mixedPlan.shelfDiameter-clearance-d/2; x+=4){
+            if(fitsCircle(x,y,d,s.placements)){best=d;found=true;break;}
+          }
+        }
+        if(found) break;
+      }
+      let count=0;
+      const added:any[]=[];
+      if(best>0){
+        for(let y=clearance+best/2; y<=mixedPlan.shelfDiameter-clearance-best/2; y+=4){
+          for(let x=clearance+best/2; x<=mixedPlan.shelfDiameter-clearance-best/2; x+=4){
+            if(fitsCircle(x,y,best,[...s.placements,...added])){
+              added.push({x:x-best/2,y:y-best/2,w:best,h:best,shape:'Kase / Kupa'});
+              count++;
+            }
+          }
+        }
+      }
+      return { level:s.level, diameter:best, count };
+    });
+    return {
+      maxDiameter: Math.max(0,...shelfResults.map(x=>x.diameter)),
+      countAtMax: shelfResults.reduce((n,x)=>n+(x.diameter===Math.max(0,...shelfResults.map(y=>y.diameter))?x.count:0),0),
+      shelves:shelfResults
+    };
+  }, [mixedPlan]);
+
+
   const recommendedRackGap=mixedPlan?.gap||gapCandidates[0]||30;
   const usableShelfDiameter=Math.min(Math.max(100,kiln.shelfDiameter),Math.max(100,kiln.diameter-kilnEdgeClearance*2));
   const effectiveShelfDiameter=Math.min(Math.max(100,shelfSize),Math.max(100,usableShelfDiameter));
@@ -742,6 +794,15 @@ function App() {
               <div><b>3. Karma · Ürün 1 + Ürün 2</b><span className="comboBadge">OTOMATİK SEÇİLDİ</span><small>{mixedPlan?.placedCount || 0} yerleşti · {mixedPlan?.unplaced || 0} dışarıda · {mixedPlan?.totalLevels || 0} raf · %{mixedPlan?.utilization || 0} doluluk · ürünler arası 8 mm</small></div>
               <strong>%{mixedPlan?.utilization || 0}</strong>
             </div>
+          </div>
+
+          <div className="freePocketBox">
+            <div><span className="eyebrow">KALAN BOŞLUK ANALİZİ</span><b>Ek ürün kapasitesi</b><small>Mevcut yerleşim bozulmadan, 8 mm güvenlik payı ile kalan ceplere sığabilecek yuvarlak ürünleri tarar.</small></div>
+            <div className="freePocketStats">
+              <div><span>En büyük uygun çap</span><strong>{freePocketAnalysis.maxDiameter ? 'Ø '+freePocketAnalysis.maxDiameter+' mm' : 'Yok'}</strong></div>
+              <div><span>Bu ölçüde ek ürün</span><strong>{freePocketAnalysis.countAtMax || 0} adet</strong></div>
+            </div>
+            <div className="freePocketShelfList">{freePocketAnalysis.shelves.map((x:any)=><span key={x.level}>Raf {x.level}: <b>{x.diameter ? 'Ø '+x.diameter+' mm' : 'uygun cep yok'}</b> · {x.count} adet</span>)}</div>
           </div>
 
           <div className="shelfPlanList">
