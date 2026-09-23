@@ -335,7 +335,7 @@ function App() {
     type Item = { productId:number; productName:string; shape:ProductSpec['shape']; w:number; h:number; vertical:number; index:number };
     type Placement = { productId:number; productName:string; shape:ProductSpec['shape']; x:number; y:number; w:number; h:number; rotated:boolean };
     type ShelfPlan = { level:number; heightUsed:number; recommendedSpacing:number; placements:Placement[]; utilization:number; emptyArea:number; filledArea:number };
-    type LoadPlan = { name:string; shelves:ShelfPlan[]; placedCount:number; unplaced:number; utilization:number; totalLevels:number; recommendedSpacing:number; safety:number; emptyArea:number; shelfDiameter:number; gap:number; counts:Record<string,number>; totalPieces:number };
+    type LoadPlan = { name:string; shelves:ShelfPlan[]; placedCount:number; unplaced:number; utilization:number; totalLevels:number; recommendedSpacing:number; safety:number; emptyArea:number; shelfDiameter:number; gap:number; counts:Record<string,number>; totalPieces:number; mixedShelfCount:number };
 
     const shelfDiameter = Math.min(Math.max(100, shelfSize), Math.max(100, kiln.shelfDiameter), Math.max(100, kiln.diameter-kilnEdgeClearance*2));
     const R=shelfDiameter/2;
@@ -508,7 +508,8 @@ function App() {
         totalLevels:shelves.length,
         recommendedSpacing:shelves.length?Math.max(...shelves.map(s=>s.recommendedSpacing)):0,
         safety:clearance,emptyArea:shelves.reduce((n,s)=>n+s.emptyArea,0),
-        shelfDiameter,gap,counts,totalPieces:items.length
+        shelfDiameter,gap,counts,totalPieces:items.length,
+        mixedShelfCount:shelves.filter(s=>new Set(s.placements.map(p=>p.productId)).size>1).length
       };
     };
 
@@ -516,8 +517,14 @@ function App() {
       const modes:['areaDesc','areaAsc','sideDesc','alternating']=['areaDesc','areaAsc','sideDesc','alternating'];
       const all:LoadPlan[]=[];
       for(const gap of gapCandidates) for(const mode of modes) all.push(buildPlan(source,name,mode,gap));
-      const better=(a:LoadPlan,b:LoadPlan)=>
-        a.unplaced-b.unplaced||a.totalLevels-b.totalLevels||b.utilization-a.utilization||a.emptyArea-b.emptyArea;
+      const better=(a:LoadPlan,b:LoadPlan)=>{
+        const mixedPriority=source.length>1 ? (b.mixedShelfCount-a.mixedShelfCount) : 0;
+        return a.unplaced-b.unplaced ||
+          a.totalLevels-b.totalLevels ||
+          mixedPriority ||
+          b.utilization-a.utilization ||
+          a.emptyArea-b.emptyArea;
+      };
       const recommended=all.length?all.reduce((best,p)=>better(p,best)<0?p:best):buildPlan(source,name,'areaDesc',gapCandidates[0]);
       return {recommended,all};
     };
