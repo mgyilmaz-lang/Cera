@@ -4,3 +4,55 @@
 .shelfPlanList{display:grid;gap:12px;margin-top:14px}.shelfPlan{border:1px solid #dfdfd7;border-radius:12px;background:#fff;padding:12px}.shelfPlanHead{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:9px;font-size:11px}.shelfPlanHead span{color:#778078}.shelfMap{height:210px}
 .rackItem.circle{border-radius:50%;}.rackItem.rectangle{border-radius:5px}.loadWarning{margin-top:12px;padding:12px 14px;border:1px solid #e6c58b;border-radius:12px;background:#fff7e5;color:#76551c;font-size:12px;line-height:1.45}
 .productPreview{margin-top:16px;border:1px solid #dfdfd7;border-radius:14px;background:#fafaf7;padding:15px}.productPreviewHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}.productPreviewHead span{font-size:10px;letter-spacing:.12em;color:#778078;font-weight:700}.productPreviewHead b{font-size:12px}.productPreview svg{display:block;width:100%;max-width:330px;height:210px;margin:0 auto}.previewShape{fill:#dcefe0;stroke:#24633b;stroke-width:2}.previewInner{fill:#fafaf7;stroke:#7ba989;stroke-width:1.5}.previewRim{fill:#dcefe0;stroke:#24633b;stroke-width:2}.previewInnerLine{fill:none;stroke:#7ba989;stroke-width:1.5}.previewDimension{stroke:#9a9f98;stroke-width:1}.previewText{fill:#68706a;font-size:9px;font-family:Arial,sans-serif}.productPreview small{display:block;color:#778078;font-size:10px;line-height:1.4;text-align:center}
+/* Hobi Seramik reference UI */
+.appHeader{display:flex;align-items:center;gap:22px;margin-bottom:12px;padding:4px 0 8px}
+.brandMark{display:flex;align-items:center;gap:10px;min-width:205px}
+.brandName{font-family:Georgia,serif;font-style:italic;font-weight:700;font-size:24px;line-height:1}
+.brandSub{font-size:8px;letter-spacing:.12em;color:#7a827c;margin-top:4px}
+.appHeader .logo{width:42px;height:42px;border-radius:12px;background:#172018;color:#e8c66b;font-size:21px}
+.appHeader .tabs{flex:1;justify-content:center;gap:2px;padding:0;overflow:visible}
+.appHeader .tabs button{min-width:76px;border:0;background:transparent;border-radius:12px;padding:8px 10px;color:#172018;display:flex;flex-direction:column;align-items:center;gap:3px}
+.appHeader .tabs button span{font-size:21px;line-height:1}
+.appHeader .tabs button small{font-size:11px;color:#59635c}
+.appHeader .tabs button.active{background:#dceee1;color:#195d38}
+.appHeader .tabs button.active small{color:#195d38;font-weight:700}
+.appHeader .tabs .moreTab{min-width:76px}
+.clayWorkspace{display:grid;grid-template-columns:minmax(0,1.03fr) minmax(380px,.97fr);gap:16px;align-items:start}
+.clayInputPanel{padding:22px;background:#fff;border-radius:18px}
+.sectionHero{display:flex;align-items:center;gap:13px;margin-bottom:12px}
+.sectionIcon{width:50px;height:50px;border-radius:16px;background:#dceee1;color:#173f29;display:grid;place-items:center;font-size:30px}
+.sectionHero h2{font-size:25px;margin:3px 0 0;letter-spacing:-.04em}
+.clayResult{background:#f1f8f2!important;color:#172018!important;border:1px solid #d9eadc!important;box-shadow:none!important;padding:22px;position:sticky;top:14px}
+.resultTitle{display:flex;align-items:center;gap:11px;margin-bottom:8px}
+.resultTitle h2{margin:2px 0 0;font-size:20px}
+.resultIcon{width:38px;height:38px;border-radius:11px;background:#dceee1;color:#24633b;display:grid;place-items:center;font-size:21px}
+.clayResult .heroValue{font-size:36px;color:#24633b;margin-top:16px}
+.clayResult .cards{grid-template-columns:1fr 1fr}
+.clayResult .price{border-top-color:#d5e6d8}
+.clayResult .price strong{color:#24633b}
+.clayInputPanel .claySectionTitle{font-size:16px;margin-top:18px}
+.clayInputPanel .selectionRow select{height:46px}
+.clayInputPanel .fields{grid-template-columns:1fr 1fr}
+.clayInputPanel .productTabs{margin-top:14px}
+.clayInputPanel .productHint{padding-left:2px}
+.clayInputPanel .productPreview{background:#f8faf6;border-color:#e0e8df}
+.clayInputPanel .okBox{font-size:13px}
+@media(max-width:900px){
+  .appHeader{gap:10px;flex-wrap:wrap}
+  .brandMark{min-width:auto;flex:1}
+  .appHeader .tabs{order:3;flex-basis:100%;justify-content:flex-start;overflow:auto}
+  .appHeader .tabs button{min-width:70px}
+  .clayWorkspace{grid-template-columns:1fr}
+  .clayResult{position:static}
+}
+@media(max-width:560px){
+  .brandName{font-size:20px}.brandSub{font-size:7px}
+  .appHeader .logo{width:38px;height:38px}
+  .modeSwitch button{padding:6px 8px}
+  .appHeader .tabs button{min-width:64px;padding:7px 8px}
+  .appHeader .tabs button span{font-size:19px}
+  .appHeader .tabs button small{font-size:10px}
+  .clayInputPanel,.clayResult{padding:17px}
+  .sectionHero h2{font-size:21px}
+  .clayInputPanel .fields{grid-template-columns:1fr}
+}
