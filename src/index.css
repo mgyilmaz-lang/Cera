@@ -80,3 +80,10 @@
 
 .combinationHead h3{font-size:19px}
 .shelfPlanHead span{font-size:10px}
+
+.kilnProductSource{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0;padding:12px;border:1px solid #d9e8da;border-radius:14px;background:#f7faf6}
+.kilnProductSource>div{padding:11px 12px;border-radius:11px;background:#fff;border:1px solid #e3e9e1;display:flex;flex-direction:column;gap:5px}
+.kilnProductSource span{font-size:9px;letter-spacing:.08em;color:#778078;font-weight:700}
+.kilnProductSource b{font-size:12px;line-height:1.45;color:#172018}
+.planTitle{font-weight:700;color:#24633b;margin:14px 0 8px}
+@media(max-width:600px){.kilnProductSource{grid-template-columns:1fr}}
