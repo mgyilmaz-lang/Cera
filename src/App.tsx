@@ -387,15 +387,13 @@ function App() {
       Math.max(100, kiln.diameter - kilnEdgeClearance * 2)
     );
     const R = shelfDiameter / 2;
-    const safety = 10;
-    const clearance = 6;
+    const clearance = 8;
+    const step = 2;
 
     const items:Item[] = products.flatMap(p => Array.from({length:Math.min(Math.max(0,p.pieces),100)},(_,i)=>({
       productId:p.id,
       productName:p.name+' #'+(i+1),
       shape:p.shape,
-      // Her ürünün iki yatay ölçüsü birlikte kullanılır:
-      // dikdörtgende genişlik × derinlik, yuvarlakta çap × çap.
       w:Math.max(20,p.shape==='Dikdörtgen'?p.width:p.diameter),
       h:Math.max(20,p.shape==='Dikdörtgen'?p.diameter:p.diameter),
       vertical:Math.max(20,p.height),
@@ -403,27 +401,25 @@ function App() {
     })));
 
     const variants = [
-      {name:'Sıkı Karma Dolum',rotate:true,sort:'area'},
-      {name:'Küçüklerle Boşluk Doldur',rotate:true,sort:'smallFirst'},
-      {name:'Büyükten Küçüğe Karma',rotate:true,sort:'width'},
+      {name:'Maksimum Doluluk',rotate:true,sort:'area'},
+      {name:'Karma Boşluk Doldurma',rotate:true,sort:'smallFirst'},
+      {name:'Büyük + Küçük Karma',rotate:true,sort:'width'},
       {name:'Yükseklik Dengeli',rotate:true,sort:'height'}
     ] as const;
 
     const rectInsideCircle=(x:number,y:number,w:number,h:number)=>{
-      const cx=x+w/2, cy=y+h/2;
-      const corners=[[x,y],[x+w,y],[x,y+h],[x+w,y+h]];
-      return corners.every(([px,py])=>Math.hypot(px-R,py-R)<=R-clearance);
+      const cx=R,cy=R;
+      return [[x,y],[x+w,y],[x,y+h],[x+w,y+h]]
+        .every(([px,py])=>Math.hypot(px-cx,py-cy)<=R-clearance);
     };
-    const circleInsideCircle=(x:number,y:number,w:number)=>{
-      return Math.hypot(x+w/2-R,y+w/2-R)+w/2<=R-clearance;
+    const circleInsideCircle=(x:number,y:number,d:number)=>{
+      return Math.hypot(x+d/2-R,y+d/2-R)+d/2<=R-clearance;
     };
     const overlaps=(a:Placement,b:Placement)=>{
-      if(a.shape!=='Dikdörtgen'&&b.shape!=='Dikdörtgen'){
-        return Math.hypot(a.x+a.w/2-(b.x+b.w/2),a.y+a.h/2-(b.y+b.h/2)) < a.w/2+b.w/2+clearance;
-      }
-      if(a.shape==='Dikdörtgen'&&b.shape==='Dikdörtgen'){
+      if(a.shape!=='Dikdörtgen'&&b.shape!=='Dikdörtgen')
+        return Math.hypot(a.x+a.w/2-b.x-b.w/2,a.y+a.h/2-b.y-b.h/2)<a.w/2+b.w/2+clearance;
+      if(a.shape==='Dikdörtgen'&&b.shape==='Dikdörtgen')
         return a.x<b.x+b.w+clearance&&a.x+a.w+clearance>b.x&&a.y<b.y+b.h+clearance&&a.y+a.h+clearance>b.y;
-      }
       const circle=a.shape!=='Dikdörtgen'?a:b;
       const rect=a.shape==='Dikdörtgen'?a:b;
       const cx=circle.x+circle.w/2,cy=circle.y+circle.h/2;
@@ -431,6 +427,9 @@ function App() {
       return Math.hypot(cx-nx,cy-ny)<circle.w/2+clearance;
     };
 
+    // Her raf için gerçek 2D yerleşim aranır. Önceki "alan bölme" yaklaşımı yerine
+    // aday konumların komşu kenarlarına ve merkezine yakın noktalara bakılır.
+    // Böylece farklı boyutlu ürünler aynı rafta karışabilir ve ürünler birbirine değmez.
     const pack=(variant:typeof variants[number])=>{
       const source=[...items].sort((a,b)=>{
         if(variant.sort==='smallFirst') return a.w*a.h-b.w*b.h;
@@ -445,30 +444,42 @@ function App() {
         const options=variant.rotate&&item.shape==='Dikdörtgen'&&item.w!==item.h
           ? [{w:item.w,h:item.h,rotated:false},{w:item.h,h:item.w,rotated:true}]
           : [{w:item.w,h:item.h,rotated:false}];
-        let best:{placement:Placement;score:number}|null=null;
 
+        const candidates:{x:number;y:number;w:number;h:number;rotated:boolean}[]=[];
         for(const o of options){
           if(o.w+2*clearance>shelfDiameter||o.h+2*clearance>shelfDiameter) continue;
-          // Merkezden dışa doğru tarama. Her iki yatay boyut da rafın gerçek dairesel
-          // sınırında kontrol edilir.
-          const step=4;
-          for(let y=0;y+o.h<=shelfDiameter;y+=step){
-            for(let x=0;x+o.w<=shelfDiameter;x+=step){
-              const valid=item.shape==='Dikdörtgen'
-                ? rectInsideCircle(x,y,o.w,o.h)
-                : circleInsideCircle(x,y,o.w);
-              if(!valid) continue;
-              const p:Placement={productId:item.productId,productName:item.productName,shape:item.shape,x,y,w:o.w,h:o.h,rotated:o.rotated};
-              if(shelf.placements.some(q=>overlaps(q,p))) continue;
-
-              const cx=x+o.w/2,cy=y+o.h/2;
-              const centerDist=Math.hypot(cx-R,cy-R);
-              const area=o.w*o.h;
-              // Önce ürün sayısını, sonra boşluğu ve merkeze yakın kompaktlığı optimize et.
-              const score=shelf.placements.length*10000000-area*0.001-centerDist*2;
-              if(!best||score>best.score) best={placement:p,score};
-            }
+          const xs=new Set<number>([clearance, Math.max(clearance,R-o.w/2), Math.max(clearance,shelfDiameter-o.w-clearance)]);
+          const ys=new Set<number>([clearance, Math.max(clearance,R-o.h/2), Math.max(clearance,shelfDiameter-o.h-clearance)]);
+          for(const q of shelf.placements){
+            xs.add(Math.max(clearance,q.x+q.w+clearance));
+            xs.add(Math.max(clearance,q.x-o.w-clearance));
+            ys.add(Math.max(clearance,q.y+q.h+clearance));
+            ys.add(Math.max(clearance,q.y-o.h-clearance));
           }
+          for(const x0 of xs) for(const y0 of ys){
+            const x=Math.round(x0/step)*step,y=Math.round(y0/step)*step;
+            if(x<0||y<0||x+o.w>shelfDiameter||y+o.h>shelfDiameter) continue;
+            candidates.push({x,y,w:o.w,h:o.h,rotated:o.rotated});
+          }
+        }
+
+        let best:{placement:Placement;score:number}|null=null;
+        for(const o of candidates){
+          const inside=item.shape==='Dikdörtgen'
+            ? rectInsideCircle(o.x,o.y,o.w,o.h)
+            : circleInsideCircle(o.x,o.y,o.w);
+          if(!inside) continue;
+          const p:Placement={productId:item.productId,productName:item.productName,shape:item.shape,x:o.x,y:o.y,w:o.w,h:o.h,rotated:o.rotated};
+          if(shelf.placements.some(q=>overlaps(q,p))) continue;
+
+          const area=p.shape==='Dikdörtgen'?p.w*p.h:Math.PI*(p.w/2)*(p.h/2);
+          const cx=p.x+p.w/2,cy=p.y+p.h/2;
+          const centerDist=Math.hypot(cx-R,cy-R);
+          const rightGap=shelfDiameter-(p.x+p.w),bottomGap=shelfDiameter-(p.y+p.h);
+          // Ürün sayısını artırmak birincil amaç; ardından çevrede kalan kullanılabilir
+          // boşluğu küçültmek ve parçaları birbirine değdirmeden sıkıştırmak amaçlanır.
+          const score=shelf.placements.length*1e9 - centerDist*100 - (rightGap+bottomGap)*2 - area*0.0001;
+          if(!best||score>best.score) best={placement:p,score};
         }
         if(best){shelf.placements.push(best.placement);return true;}
         return false;
@@ -483,13 +494,13 @@ function App() {
         if(placed) continue;
 
         const currentHeight=shelves.reduce((sum,sh)=>sum+sh.heightUsed,0)
-          +(shelves.length?shelves.length-1:0)*safety;
-        if(currentHeight+item.vertical+(shelves.length?safety:0)>kiln.height) continue;
+          +(shelves.length?shelves.length-1:0)*shelfGap;
+        if(currentHeight+item.vertical+(shelves.length?shelfGap:0)>kiln.height) continue;
 
         const sh:ShelfPlan={
           level:shelves.length+1,
           heightUsed:item.vertical,
-          recommendedSpacing:item.vertical+safety,
+          recommendedSpacing:item.vertical+shelfGap,
           placements:[],
           utilization:0,
           emptyArea:0,
@@ -503,10 +514,8 @@ function App() {
 
       shelves.forEach(sh=>{
         sh.heightUsed=Math.max(...sh.placements.map(p=>products.find(x=>x.id===p.productId)?.height||20));
-        sh.recommendedSpacing=sh.heightUsed+safety;
-        sh.filledArea=sh.placements.reduce((n,p)=>n+(p.shape==='Dikdörtgen'
-          ? p.w*p.h
-          : Math.PI*(p.w/2)*(p.h/2)),0);
+        sh.recommendedSpacing=sh.heightUsed+shelfGap;
+        sh.filledArea=sh.placements.reduce((n,p)=>n+(p.shape==='Dikdörtgen'?p.w*p.h:Math.PI*(p.w/2)*(p.h/2)),0);
         sh.emptyArea=Math.max(0,Math.PI*R*R-sh.filledArea);
         sh.utilization=Math.min(100,Math.round(sh.filledArea/(Math.PI*R*R)*100));
       });
@@ -515,7 +524,6 @@ function App() {
       const requested=items.length;
       const totalArea=shelves.reduce((n,sh)=>n+sh.filledArea,0);
       const utilization=shelves.length?Math.round(totalArea/(shelves.length*Math.PI*R*R)*100):0;
-      const recommendedSpacing=Math.max(0,...shelves.map(sh=>sh.recommendedSpacing));
       return {
         name:variant.name,
         shelves,
@@ -523,8 +531,8 @@ function App() {
         unplaced:requested-placedCount,
         utilization,
         totalLevels:shelves.length,
-        recommendedSpacing,
-        safety,
+        recommendedSpacing:Math.max(0,...shelves.map(sh=>sh.recommendedSpacing)),
+        safety:clearance,
         emptyArea:shelves.reduce((n,s)=>n+s.emptyArea,0),
         shelfDiameter
       };
@@ -536,7 +544,7 @@ function App() {
       b.utilization-a.utilization ||
       a.totalLevels-b.totalLevels
     );
-  }, [products, shelfSize, kiln.height, kiln.diameter]);]);
+  }, [products, shelfSize, shelfGap, kiln.height, kiln.diameter]);]);
   async function refreshSources() {
     setBusy(true);
     try {
