@@ -320,141 +320,75 @@ function App() {
     return { clayCost, total, unit, netSale, profit: netSale - total, margin: netSale ? (netSale - total) / netSale * 100 : 0 };
   }, [clayWeight, clayEstimate, clay, packaging, pieces, salePrice, commission]);
 
-  const productLoadPlans = useMemo(() => products.map(p => {
-    const footprint = Math.max(20, p.shape === 'Dikdörtgen' ? Math.max(p.width, p.depth) : p.diameter);
-    const across = Math.max(1, Math.floor((Math.max(20, shelfSize) + shelfGap) / (footprint + shelfGap)));
-    const perShelf = across * across;
-    const fitsVertical = p.height <= shelfGap;
-    const shelfLevels = fitsVertical ? Math.max(1, Math.floor((kiln.height + shelfGap) / (p.height + shelfGap))) : 0;
-    const capacity = fitsVertical ? perShelf * shelfLevels : 0;
-    const requiredLevels = fitsVertical ? Math.max(1, Math.ceil(p.pieces / Math.max(1, perShelf))) : 0;
-    return { id:p.id, name:p.name, pieces:p.pieces, diameter:p.diameter, width:p.width, depth:p.depth, height:p.height, perShelf, shelfLevels, capacity, requiredLevels, fitsVertical };
-  }), [products, shelfSize, shelfGap, kiln.height]);
-
-  const rackGapOptions = useMemo(() => {
-    const active = products.filter(p => p.pieces > 0);
-    if (!active.length) return [];
-    const maxHeight = Math.max(...active.map(p => Math.max(20, p.height)));
-    const totalPieces = active.reduce((sum,p) => sum + p.pieces, 0);
-    const shelfArea = Math.max(10000, shelfSize * shelfSize);
-    const totalFootprintArea = active.reduce((sum,p) => {
-      const w = Math.max(20, p.shape === 'Dikdörtgen' ? p.width : p.diameter);
-      const d = Math.max(20, p.shape === 'Dikdörtgen' ? p.depth : p.shape === 'Kare' ? p.width : p.diameter);
-      const area = (p.shape === 'Dikdörtgen' || p.shape === 'Kare') ? w * d : Math.PI * (d / 2) * (d / 2);
-      return sum + area * p.pieces;
-    }, 0);
-    const avgArea = totalFootprintArea / Math.max(1, totalPieces);
-    const perLevelCapacity = Math.max(1, Math.floor((shelfArea * 0.78) / Math.max(1, avgArea)));
-    const baseCandidates = [
-      ...active.map(p => Math.max(25, Math.ceil(p.height / 5) * 5 + 5)),
-      Math.ceil((maxHeight + 10) / 5) * 5,
-      Math.ceil((maxHeight + 20) / 5) * 5,
-      Math.ceil((maxHeight + 30) / 5) * 5,
-      Math.ceil((maxHeight + 40) / 5) * 5
-    ];
-    const candidates = [...new Set(baseCandidates)].filter(x => x >= maxHeight + 5).sort((a,b) => a-b).slice(0,8);
-    return candidates.map(gap => {
-      const levels = Math.max(1, Math.floor(kiln.height / gap));
-      const requiredLevels = Math.max(1, Math.ceil(totalPieces / perLevelCapacity));
-      const capacity = perLevelCapacity * levels;
-      const fits = requiredLevels <= levels;
-      const remaining = Math.max(0, capacity - totalPieces);
-      const clearance = gap - maxHeight;
-      let label = 'Kompakt';
-      if (clearance >= 30) label = 'Güvenli';
-      else if (clearance >= 20) label = 'Rahat';
-      else if (clearance >= 10) label = 'Dengeli';
-      return { gap, levels, requiredLevels, capacity, fits, remaining, clearance, label };
-    }).sort((a,b) => Number(b.fits) - Number(a.fits) || a.gap - b.gap);
-  }, [products, shelfSize, kiln.height]);
-
-  const recommendedRackGap = rackGapOptions.find(x => x.fits)?.gap || rackGapOptions[0]?.gap || Math.max(25, Math.max(...products.map(p => p.height), 20) + 10);
-  const selectedRackOption = rackGapOptions.find(x => x.gap === shelfGap);
-  const usableShelfDiameter = Math.max(0, kiln.diameter - kilnEdgeClearance * 2);
-  const shelfCountForGap = (gap:number) => Math.max(0, Math.floor((Math.max(0, kiln.height - baseClearance - topClearance + gap)) / Math.max(1, shelfThickness + gap)));
-  const recommendedShelfCount = shelfCountForGap(recommendedRackGap);
-  const selectedShelfCount = shelfCountForGap(shelfGap);
-
-  const shelfCapacity = useMemo(() => {
-    const plan = productLoadPlans[activeProductIndex];
-    return plan?.perShelf ?? 0;
-  }, [productLoadPlans, activeProductIndex]);
 
   const kilnProducts = useMemo(() => products.slice(0, 2), [products]);
+
+  const gapCandidates = useMemo(() => {
+    const active = kilnProducts.filter(p => p.pieces > 0);
+    if (!active.length) return [30];
+    const maxHeight = Math.max(...active.map(p => Math.max(20, p.height)));
+    const base = Math.ceil((maxHeight + 10) / 5) * 5;
+    return [...new Set([base, base+5, base+10, base+15, base+20, base+30, base+40])];
+  }, [kilnProducts]);
 
   const loadCombinations = useMemo(() => {
     type Item = { productId:number; productName:string; shape:ProductSpec['shape']; w:number; h:number; vertical:number; index:number };
     type Placement = { productId:number; productName:string; shape:ProductSpec['shape']; x:number; y:number; w:number; h:number; rotated:boolean };
     type ShelfPlan = { level:number; heightUsed:number; recommendedSpacing:number; placements:Placement[]; utilization:number; emptyArea:number; filledArea:number };
+    type LoadPlan = { name:string; shelves:ShelfPlan[]; placedCount:number; unplaced:number; utilization:number; totalLevels:number; recommendedSpacing:number; safety:number; emptyArea:number; shelfDiameter:number; gap:number; counts:Record<string,number>; totalPieces:number };
 
-    const shelfDiameter = Math.min(
-      Math.max(100, shelfSize),
-      Math.max(100, kiln.diameter - kilnEdgeClearance * 2)
+    const shelfDiameter = Math.min(Math.max(100, shelfSize), Math.max(100, kiln.diameter-kilnEdgeClearance*2));
+    const R=shelfDiameter/2;
+    const clearance=8;
+    const usableHeight=Math.max(0,kiln.height-baseClearance-topClearance);
+    const step=2;
+    const isRect=(s:ProductSpec['shape']) => s==='Dikdörtgen'||s==='Kare';
+
+    const makeItems=(sourceProducts:ProductSpec[]):Item[] => sourceProducts.flatMap(p =>
+      Array.from({length:Math.max(0,Math.min(p.pieces,200))},(_,i)=>({
+        productId:p.id, productName:p.name+' #'+(i+1), shape:p.shape,
+        w:Math.max(20,isRect(p.shape)?p.width:p.diameter),
+        h:Math.max(20,p.shape==='Dikdörtgen'?p.depth:isRect(p.shape)?p.width:p.diameter),
+        vertical:Math.max(20,p.height), index:i
+      }))
     );
-    const R = shelfDiameter / 2;
-    const clearance = 8;
-    const step = 2;
 
-    const makeItems=(sourceProducts:ProductSpec[]):Item[] => sourceProducts.flatMap(p => Array.from({length:Math.min(Math.max(0,p.pieces),100)},(_,i)=>({
-      productId:p.id,
-      productName:p.name+' #'+(i+1),
-      shape:p.shape,
-      w:Math.max(20,p.shape==='Dikdörtgen'||p.shape==='Kare'?p.width:p.diameter),
-      h:Math.max(20,p.shape==='Dikdörtgen'?p.depth:p.shape==='Kare'?p.width:p.diameter),
-      vertical:Math.max(20,p.height),
-      index:i
-    })));
+    const rectInsideCircle=(x:number,y:number,w:number,h:number) =>
+      [[x,y],[x+w,y],[x,y+h],[x+w,y+h]].every(([px,py])=>Math.hypot(px-R,py-R)<=R-clearance);
+    const circleInsideCircle=(x:number,y:number,d:number) =>
+      Math.hypot(x+d/2-R,y+d/2-R)+d/2<=R-clearance;
 
-    const variants = [
-      {name:'Ürün 1 Yerleşimi',rotate:true,sort:'area',source:kilnProducts.slice(0,1)},
-      {name:'Ürün 2 Yerleşimi',rotate:true,sort:'area',source:kilnProducts.slice(1,2)},
-      {name:'Karma Yerleşim · Ürün 1 + Ürün 2',rotate:true,sort:'smallFirst',source:kilnProducts}
-    ] as const;
-
-    const rectInsideCircle=(x:number,y:number,w:number,h:number)=>{
-      const cx=R,cy=R;
-      return [[x,y],[x+w,y],[x,y+h],[x+w,y+h]]
-        .every(([px,py])=>Math.hypot(px-cx,py-cy)<=R-clearance);
-    };
-    const circleInsideCircle=(x:number,y:number,d:number)=>{
-      return Math.hypot(x+d/2-R,y+d/2-R)+d/2<=R-clearance;
-    };
-    const overlaps=(a:Placement,b:Placement)=>{
-      if(a.shape!=='Dikdörtgen'&&a.shape!=='Kare'&&b.shape!=='Dikdörtgen'&&b.shape!=='Kare')
+    const overlaps=(a:Placement,b:Placement) => {
+      if(!isRect(a.shape)&&!isRect(b.shape))
         return Math.hypot(a.x+a.w/2-b.x-b.w/2,a.y+a.h/2-b.y-b.h/2)<a.w/2+b.w/2+clearance;
-      if((a.shape==='Dikdörtgen'||a.shape==='Kare')&&(b.shape==='Dikdörtgen'||b.shape==='Kare'))
+      if(isRect(a.shape)&&isRect(b.shape))
         return a.x<b.x+b.w+clearance&&a.x+a.w+clearance>b.x&&a.y<b.y+b.h+clearance&&a.y+a.h+clearance>b.y;
-      const circle=(a.shape!=='Dikdörtgen'&&a.shape!=='Kare')?a:b;
-      const rect=(a.shape==='Dikdörtgen'||a.shape==='Kare')?a:b;
+      const circle=isRect(a.shape)?b:a, rect=isRect(a.shape)?a:b;
       const cx=circle.x+circle.w/2,cy=circle.y+circle.h/2;
       const nx=Math.max(rect.x,Math.min(cx,rect.x+rect.w)),ny=Math.max(rect.y,Math.min(cy,rect.y+rect.h));
       return Math.hypot(cx-nx,cy-ny)<circle.w/2+clearance;
     };
 
-    // Her raf için gerçek 2D yerleşim aranır. Önceki "alan bölme" yaklaşımı yerine
-    // aday konumların komşu kenarlarına ve merkezine yakın noktalara bakılır.
-    // Böylece farklı boyutlu ürünler aynı rafta karışabilir ve ürünler birbirine değmez.
-    const pack=(variant:typeof variants[number])=>{
-      const items=makeItems(variant.source);
-      const source=[...items].sort((a,b)=>{
-        if(variant.sort==='smallFirst') return a.w*a.h-b.w*b.h;
-        if(variant.sort==='width') return Math.max(b.w,b.h)-Math.max(a.w,a.h);
-        if(variant.sort==='height') return b.vertical-a.vertical||b.w*b.h-a.w*a.h;
-        return b.w*b.h-a.w*a.h;
+    const buildPlan=(sourceProducts:ProductSpec[],name:string,mode:'areaDesc'|'areaAsc'|'sideDesc'|'alternating',gap:number):LoadPlan => {
+      const items=makeItems(sourceProducts);
+      const sorted=[...items].sort((a,b)=>{
+        const aa=a.w*a.h,bb=b.w*b.h;
+        if(mode==='areaAsc') return aa-bb;
+        if(mode==='sideDesc') return Math.max(b.w,b.h)-Math.max(a.w,a.h)||bb-aa;
+        if(mode==='alternating') return Math.max(b.w,b.h)-Math.max(a.w,a.h)||bb-aa;
+        return bb-aa;
       });
       const shelves:ShelfPlan[]=[];
-      const placedIds=new Set<string>();
 
-      const tryPlace=(shelf:ShelfPlan,item:Item)=>{
-        const options=variant.rotate&&item.shape==='Dikdörtgen'&&item.w!==item.h
+      const tryPlace=(shelf:ShelfPlan,item:Item) => {
+        const options=item.shape==='Dikdörtgen'&&item.w!==item.h
           ? [{w:item.w,h:item.h,rotated:false},{w:item.h,h:item.w,rotated:true}]
           : [{w:item.w,h:item.h,rotated:false}];
-
-        const candidates:{x:number;y:number;w:number;h:number;rotated:boolean}[]=[];
+        let best:{p:Placement;score:number}|null=null;
         for(const o of options){
           if(o.w+2*clearance>shelfDiameter||o.h+2*clearance>shelfDiameter) continue;
-          const xs=new Set<number>([clearance, Math.max(clearance,R-o.w/2), Math.max(clearance,shelfDiameter-o.w-clearance)]);
-          const ys=new Set<number>([clearance, Math.max(clearance,R-o.h/2), Math.max(clearance,shelfDiameter-o.h-clearance)]);
+          const xs=new Set<number>([clearance,Math.max(clearance,R-o.w/2),Math.max(clearance,shelfDiameter-o.w-clearance)]);
+          const ys=new Set<number>([clearance,Math.max(clearance,R-o.h/2),Math.max(clearance,shelfDiameter-o.h-clearance)]);
           for(const q of shelf.placements){
             xs.add(Math.max(clearance,q.x+q.w+clearance));
             xs.add(Math.max(clearance,q.x-o.w-clearance));
@@ -464,87 +398,103 @@ function App() {
           for(const x0 of xs) for(const y0 of ys){
             const x=Math.round(x0/step)*step,y=Math.round(y0/step)*step;
             if(x<0||y<0||x+o.w>shelfDiameter||y+o.h>shelfDiameter) continue;
-            candidates.push({x,y,w:o.w,h:o.h,rotated:o.rotated});
+            const inside=isRect(item.shape)?rectInsideCircle(x,y,o.w,o.h):circleInsideCircle(x,y,o.w);
+            if(!inside) continue;
+            const p:Placement={productId:item.productId,productName:item.productName,shape:item.shape,x,y,w:o.w,h:o.h,rotated:o.rotated};
+            if(shelf.placements.some(q=>overlaps(q,p))) continue;
+            let contact=0;
+            for(const q of shelf.placements){
+              const hx=Math.max(0,Math.min(p.x+p.w,q.x+q.w)-Math.max(p.x,q.x));
+              const hy=Math.max(0,Math.min(p.y+p.h,q.y+q.h)-Math.max(p.y,q.y));
+              if(Math.abs(p.x+p.w+clearance-q.x)<1||Math.abs(q.x+q.w+clearance-p.x)<1) contact+=hy;
+              if(Math.abs(p.y+p.h+clearance-q.y)<1||Math.abs(q.y+q.h+clearance-p.y)<1) contact+=hx;
+            }
+            const centerDist=Math.hypot(p.x+p.w/2-R,p.y+p.h/2-R);
+            const score=contact*1000-centerDist;
+            if(!best||score>best.score) best={p,score};
           }
         }
-
-        let best:{placement:Placement;score:number}|null=null;
-        for(const o of candidates){
-          const inside=item.shape==='Dikdörtgen'
-            ? rectInsideCircle(o.x,o.y,o.w,o.h)
-            : circleInsideCircle(o.x,o.y,o.w);
-          if(!inside) continue;
-          const p:Placement={productId:item.productId,productName:item.productName,shape:item.shape,x:o.x,y:o.y,w:o.w,h:o.h,rotated:o.rotated};
-          if(shelf.placements.some(q=>overlaps(q,p))) continue;
-
-          const area=(p.shape==='Dikdörtgen'||p.shape==='Kare')?p.w*p.h:Math.PI*(p.w/2)*(p.h/2);
-          const cx=p.x+p.w/2,cy=p.y+p.h/2;
-          const centerDist=Math.hypot(cx-R,cy-R);
-          const rightGap=shelfDiameter-(p.x+p.w),bottomGap=shelfDiameter-(p.y+p.h);
-          // Ürün sayısını artırmak birincil amaç; ardından çevrede kalan kullanılabilir
-          // boşluğu küçültmek ve parçaları birbirine değdirmeden sıkıştırmak amaçlanır.
-          const score=shelf.placements.length*1e9 - centerDist*100 - (rightGap+bottomGap)*2 - area*0.0001;
-          if(!best||score>best.score) best={placement:p,score};
-        }
-        if(best){shelf.placements.push(best.placement);return true;}
-        return false;
+        if(!best) return false;
+        shelf.placements.push(best.p);
+        shelf.heightUsed=Math.max(shelf.heightUsed,item.vertical);
+        return true;
       };
 
-      for(const item of source){
+      for(const item of sorted){
         let placed=false;
         for(const shelf of shelves){
-          if(shelf.heightUsed<item.vertical) continue;
-          if(tryPlace(shelf,item)){placedIds.add(item.productId+'-'+item.index);placed=true;break;}
+          const newHeight=Math.max(shelf.heightUsed,item.vertical);
+          const total=shelves.reduce((sum,s)=>sum+(s===shelf?newHeight:s.heightUsed),0)+Math.max(0,shelves.length-1)*gap;
+          if(total>usableHeight) continue;
+          if(tryPlace(shelf,item)){placed=true;break;}
         }
         if(placed) continue;
-
-        const currentHeight=shelves.reduce((sum,sh)=>sum+sh.heightUsed,0)
-          +(shelves.length?shelves.length-1:0)*shelfGap;
-        if(currentHeight+item.vertical+(shelves.length?shelfGap:0)>kiln.height) continue;
-
-        const sh:ShelfPlan={
-          level:shelves.length+1,
-          heightUsed:item.vertical,
-          recommendedSpacing:item.vertical+shelfGap,
-          placements:[],
-          utilization:0,
-          emptyArea:0,
-          filledArea:0
-        };
-        if(tryPlace(sh,item)){
-          placedIds.add(item.productId+'-'+item.index);
-          shelves.push(sh);
-        }
+        const total=shelves.reduce((sum,s)=>sum+s.heightUsed,0)+item.vertical+shelves.length*gap;
+        if(total>usableHeight) continue;
+        const shelf:ShelfPlan={level:shelves.length+1,heightUsed:item.vertical,recommendedSpacing:item.vertical+gap,placements:[],utilization:0,emptyArea:0,filledArea:0};
+        if(tryPlace(shelf,item)) shelves.push(shelf);
       }
 
-      shelves.forEach(sh=>{
-        sh.heightUsed=Math.max(...sh.placements.map(p=>products.find(x=>x.id===p.productId)?.height||20));
-        sh.recommendedSpacing=sh.heightUsed+shelfGap;
-        sh.filledArea=sh.placements.reduce((n,p)=>n+((p.shape==='Dikdörtgen'||p.shape==='Kare')?p.w*p.h:Math.PI*(p.w/2)*(p.h/2)),0);
-        sh.emptyArea=Math.max(0,Math.PI*R*R-sh.filledArea);
-        sh.utilization=Math.min(100,Math.round(sh.filledArea/(Math.PI*R*R)*100));
+      shelves.forEach(s=>{
+        s.recommendedSpacing=s.heightUsed+gap;
+        s.filledArea=s.placements.reduce((sum,p)=>sum+(isRect(p.shape)?p.w*p.h:Math.PI*(p.w/2)*(p.h/2)),0);
+        s.emptyArea=Math.max(0,Math.PI*R*R-s.filledArea);
+        s.utilization=Math.min(100,Math.round(s.filledArea/(Math.PI*R*R)*100));
       });
-
-      const placedCount=placedIds.size;
-      const requested=items.length;
-      const totalArea=shelves.reduce((n,sh)=>n+sh.filledArea,0);
-      const utilization=shelves.length?Math.round(totalArea/(shelves.length*Math.PI*R*R)*100):0;
+      const placedCount=shelves.reduce((n,s)=>n+s.placements.length,0);
+      const counts:Record<string,number>={};
+      shelves.flatMap(s=>s.placements).forEach(p=>{counts[p.productId]=(counts[p.productId]||0)+1;});
+      const totalArea=shelves.reduce((n,s)=>n+s.filledArea,0);
       return {
-        name:variant.name,
-        shelves,
-        placedCount,
-        unplaced:requested-placedCount,
-        utilization,
+        name,shelves,placedCount,unplaced:items.length-placedCount,
+        utilization:shelves.length?Math.round(totalArea/(shelves.length*Math.PI*R*R)*100):0,
         totalLevels:shelves.length,
-        recommendedSpacing:Math.max(0,...shelves.map(sh=>sh.recommendedSpacing)),
-        safety:clearance,
-        emptyArea:shelves.reduce((n,s)=>n+s.emptyArea,0),
-        shelfDiameter
+        recommendedSpacing:shelves.length?Math.max(...shelves.map(s=>s.recommendedSpacing)):0,
+        safety:clearance,emptyArea:shelves.reduce((n,s)=>n+s.emptyArea,0),
+        shelfDiameter,gap,counts,totalPieces:items.length
       };
     };
 
-    return variants.map(pack);
-  }, [kilnProducts, shelfSize, shelfGap, kiln.height, kiln.diameter]);
+    const chooseBest=(source:ProductSpec[],name:string)=>{
+      const modes:['areaDesc','areaAsc','sideDesc','alternating']=['areaDesc','areaAsc','sideDesc','alternating'];
+      const all:LoadPlan[]=[];
+      for(const gap of gapCandidates) for(const mode of modes) all.push(buildPlan(source,name,mode,gap));
+      const better=(a:LoadPlan,b:LoadPlan)=>
+        a.unplaced-b.unplaced||a.totalLevels-b.totalLevels||b.utilization-a.utilization||a.emptyArea-b.emptyArea;
+      const recommended=all.length?all.reduce((best,p)=>better(p,best)<0?p:best):buildPlan(source,name,'areaDesc',gapCandidates[0]);
+      return {recommended,all};
+    };
+
+    return [
+      chooseBest(kilnProducts.slice(0,1),'Ürün 1 Yerleşimi'),
+      chooseBest(kilnProducts.slice(1,2),'Ürün 2 Yerleşimi'),
+      chooseBest(kilnProducts,'Karma Yerleşim · Ürün 1 + Ürün 2')
+    ];
+  }, [kilnProducts,shelfSize,shelfGap,kiln.height,kiln.diameter,gapCandidates]);
+
+  const mixedPlan=loadCombinations[2]?.recommended||null;
+  const recommendedRackGap=mixedPlan?.gap||gapCandidates[0]||30;
+  const usableShelfDiameter=Math.max(0,kiln.diameter-kilnEdgeClearance*2);
+  const effectiveShelfDiameter=Math.min(Math.max(100,shelfSize),Math.max(100,usableShelfDiameter));
+  const shelfCountForGap=(gap:number)=>Math.max(0,Math.floor((Math.max(0,kiln.height-baseClearance-topClearance+gap))/Math.max(1,shelfThickness+gap)));
+  const recommendedShelfCount=mixedPlan?.totalLevels||shelfCountForGap(recommendedRackGap);
+  const selectedShelfCount=shelfCountForGap(shelfGap);
+
+  const rackGapOptions=useMemo(()=>{
+    const all=loadCombinations[2]?.all||[];
+    const grouped=new Map<number,any>();
+    all.forEach((x:any)=>{
+      const old=grouped.get(x.gap);
+      if(!old||x.unplaced<old.unplaced||(x.unplaced===old.unplaced&&x.totalLevels<old.totalLevels)||(x.unplaced===old.unplaced&&x.totalLevels===old.totalLevels&&x.utilization>old.utilization)) grouped.set(x.gap,x);
+    });
+    return [...grouped.values()].sort((a,b)=>a.gap-b.gap).map(x=>({
+      gap:x.gap,levels:shelfCountForGap(x.gap),requiredLevels:x.totalLevels,capacity:x.placedCount,
+      fits:x.unplaced===0,remaining:x.unplaced===0?Math.max(0,x.totalPieces-x.placedCount):0,
+      clearance:x.gap-Math.max(...kilnProducts.map(p=>p.height),20),
+      label:x.gap===recommendedRackGap?'Önerilen':x.unplaced===0?'Sığıyor':'Eksik ürün'
+    }));
+  },[loadCombinations,kilnProducts,recommendedRackGap,kiln.height]);
+
   async function refreshSources() {
     setBusy(true);
     try {
