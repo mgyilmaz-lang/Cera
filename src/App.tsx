@@ -46,7 +46,7 @@ const api = {
 
 type Clay = { id: string; brand: string; code: string; name: string; forming: 'Vakum' | 'Döküm'; type: string; color: string; min: number; max: number; recommended: number | null; dryingShrinkage: number | null; firingShrinkage: number | null; totalShrinkage: number | null; absorption: number | null; plasticity: string; packageWeightKg: number; price: number; supplier: string; sourceUrl: string; checkedAt: string; confidence: 'Doğrulandı' | 'Kısmen doğrulandı' | 'Doğrulanmalı'; notes: string; source: string };
 type Glaze = { code: string; name: string; brand: string; min: number; max: number; price: number; finish: string; coats: number; source: string; sourceUrl: string; confidence: 'Ürün serisi doğrulandı' | 'Renk/ürün bazında doğrulanmalı' };
-type Kiln = { name: string; brand: string; volume: number; power: number; maxTemp: number; diameter: number; height: number; source: string };
+type Kiln = { name: string; brand: string; volume: number; power: number; maxTemp: number; diameter: number; height: number; shelfDiameter: number; source: string };
 
 const claySource = 'https://www.izoref.com/315-camurlar';
 const clayCheckedAt = '19.09.2026';
@@ -103,14 +103,14 @@ const glazes: Glaze[] = [
 ];
 
 const kilns: Kiln[] = [
-  { name: 'Ecotop 20 S', brand: 'ROHDE', volume: 20, power: 2.3, maxTemp: 1290, diameter: 330, height: 225, source: 'ROHDE' },
-  { name: 'Ecotop 43', brand: 'ROHDE', volume: 43, power: 2.9, maxTemp: 1260, diameter: 400, height: 340, source: 'ROHDE' },
-  { name: 'Ecotop 43 S', brand: 'ROHDE', volume: 43, power: 3.6, maxTemp: 1290, diameter: 400, height: 340, source: 'ROHDE' },
-  { name: 'Ecotop 60', brand: 'ROHDE', volume: 60, power: 3.6, maxTemp: 1260, diameter: 400, height: 455, source: 'ROHDE' },
-  { name: 'Ecotop 60 S', brand: 'ROHDE', volume: 60, power: 5, maxTemp: 1290, diameter: 400, height: 455, source: 'ROHDE' },
-  { name: 'Ecotop 80 S', brand: 'ROHDE', volume: 80, power: 6, maxTemp: 1290, diameter: 470, height: 455, source: 'ROHDE' },
-  { name: 'Ecotop 95 S', brand: 'ROHDE', volume: 95, power: 7.3, maxTemp: 1290, diameter: 520, height: 455, source: 'ROHDE' },
-  { name: 'Ecotop 145 S', brand: 'ROHDE', volume: 145, power: 8.8, maxTemp: 1290, diameter: 520, height: 680, source: 'ROHDE' }
+  { name: 'Ecotop 20 S', brand: 'ROHDE', volume: 20, power: 2.3, maxTemp: 1290, diameter: 330, height: 225, shelfDiameter: 290, source: 'ROHDE · resmi teknik katalog' },
+  { name: 'Ecotop 43', brand: 'ROHDE', volume: 43, power: 2.9, maxTemp: 1260, diameter: 400, height: 340, shelfDiameter: 350, source: 'ROHDE · resmi teknik katalog' },
+  { name: 'Ecotop 43 S', brand: 'ROHDE', volume: 43, power: 3.6, maxTemp: 1290, diameter: 400, height: 340, shelfDiameter: 350, source: 'ROHDE · resmi teknik katalog' },
+  { name: 'Ecotop 60', brand: 'ROHDE', volume: 60, power: 3.6, maxTemp: 1260, diameter: 400, height: 455, shelfDiameter: 350, source: 'ROHDE · resmi teknik katalog' },
+  { name: 'Ecotop 60 S', brand: 'ROHDE', volume: 60, power: 5, maxTemp: 1290, diameter: 400, height: 455, shelfDiameter: 350, source: 'ROHDE · resmi teknik katalog' },
+  { name: 'Ecotop 80 S', brand: 'ROHDE', volume: 80, power: 6, maxTemp: 1290, diameter: 470, height: 455, shelfDiameter: 410, source: 'ROHDE · resmi teknik katalog' },
+  { name: 'Ecotop 95 S', brand: 'ROHDE', volume: 95, power: 7.3, maxTemp: 1290, diameter: 520, height: 455, shelfDiameter: 470, source: 'ROHDE · resmi teknik katalog' },
+  { name: 'Ecotop 145 S', brand: 'ROHDE', volume: 145, power: 8.8, maxTemp: 1290, diameter: 520, height: 680, shelfDiameter: 470, source: 'ROHDE · resmi teknik katalog' }
 ];
 
 const money = (n: number) => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(n);
@@ -164,7 +164,7 @@ function App() {
   const [firingTemp, setFiringTemp] = useState(1220);
   const [surface, setSurface] = useState(0.12);
   const [applicationRate, setApplicationRate] = useState(60);
-  const [shelfSize, setShelfSize] = useState(400);
+  const [shelfSize, setShelfSize] = useState(kilns[3].shelfDiameter);
   const [shelfGap, setShelfGap] = useState(90);
   const shelfThickness = 10;
   const kilnEdgeClearance = 10;
@@ -337,7 +337,7 @@ function App() {
     type ShelfPlan = { level:number; heightUsed:number; recommendedSpacing:number; placements:Placement[]; utilization:number; emptyArea:number; filledArea:number };
     type LoadPlan = { name:string; shelves:ShelfPlan[]; placedCount:number; unplaced:number; utilization:number; totalLevels:number; recommendedSpacing:number; safety:number; emptyArea:number; shelfDiameter:number; gap:number; counts:Record<string,number>; totalPieces:number };
 
-    const shelfDiameter = Math.min(Math.max(100, shelfSize), Math.max(100, kiln.diameter-kilnEdgeClearance*2));
+    const shelfDiameter = Math.min(Math.max(100, shelfSize), Math.max(100, kiln.shelfDiameter), Math.max(100, kiln.diameter-kilnEdgeClearance*2));
     const R=shelfDiameter/2;
     const clearance=8;
     const usableHeight=Math.max(0,kiln.height-baseClearance-topClearance);
@@ -474,7 +474,7 @@ function App() {
 
   const mixedPlan=loadCombinations[2]?.recommended||null;
   const recommendedRackGap=mixedPlan?.gap||gapCandidates[0]||30;
-  const usableShelfDiameter=Math.max(0,kiln.diameter-kilnEdgeClearance*2);
+  const usableShelfDiameter=Math.min(Math.max(100,kiln.shelfDiameter),Math.max(100,kiln.diameter-kilnEdgeClearance*2));
   const effectiveShelfDiameter=Math.min(Math.max(100,shelfSize),Math.max(100,usableShelfDiameter));
   const shelfCountForGap=(gap:number)=>Math.max(0,Math.floor((Math.max(0,kiln.height-baseClearance-topClearance+gap))/Math.max(1,shelfThickness+gap)));
   const recommendedShelfCount=mixedPlan?.totalLevels||shelfCountForGap(recommendedRackGap);
