@@ -1,6 +1,6 @@
 import type { Placement, PlacementItem, PlacementResult, Shelf } from './types';
 
-type Candidate = { x:number; y:number; rotation:0|90; width:number; height:number };
+type Candidate = { x:number; y:number; rotation:0|90; width:number; height:number; shape: PlacementItem['shape'] };
 
 const areaOf = (item: PlacementItem) => item.shape === 'circle'
   ? Math.PI * (item.width / 2) * (item.width / 2)
@@ -14,6 +14,7 @@ const candidatesFor = (item: PlacementItem, shelf: Shelf): Candidate[] => {
     rotation,
     width: rotation === 90 ? item.height : item.width,
     height: rotation === 90 ? item.width : item.height,
+    shape: item.shape,
   })).filter(c => c.width + 2 * shelf.clearance <= shelf.width && c.height + 2 * shelf.clearance <= shelf.height);
 };
 
@@ -40,7 +41,7 @@ const valid = (candidate: Candidate, placed: Placement[], shelf: Shelf) => {
   if (candidate.x < shelf.clearance || candidate.y < shelf.clearance) return false;
   if (candidate.x + candidate.width + shelf.clearance > shelf.width) return false;
   if (candidate.y + candidate.height + shelf.clearance > shelf.height) return false;
-  const p = { ...candidate, id: '__candidate__', shape: 'rect' as const, allowRotation: true };
+  const p: Placement = { ...candidate, id: '__candidate__', allowRotation: true };
   return !placed.some(existing => overlap(p, existing, shelf.clearance));
 };
 
